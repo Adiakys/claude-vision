@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claude-vision"
-version = "0.2.0"
+version = "0.3.0"
 description = "Screen capture tool for Claude Code vision skill — cross-platform frame capture with pip-only dependencies"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,6 +22,12 @@ wayland = [
 ]
 webcam = [
     "opencv-python-headless>=4.8",
+]
+picker = [
+    # Fallback region picker for systems without tkinter (e.g., Debian/Ubuntu
+    # without python3-tk). The bootstrap hook pulls this extra only when
+    # tkinter is missing — on Fedora/Arch/macOS/Windows it stays unused.
+    "pygame-ce>=2.5",
 ]
 dev = [
     "pytest>=7.0",

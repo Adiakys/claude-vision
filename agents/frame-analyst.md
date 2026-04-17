@@ -28,6 +28,32 @@ screen.
 - **`video`** — multiple frames. Only when motion / interaction / transition /
   temporal info is actually needed.
 
+## 2.5. Choose region (screen only)
+
+Strong preference: **choose `interactive` whenever the user is asking
+about a single concrete thing on screen**. Full captures cost ~10× more
+tokens and let you drown useful detail in noise.
+
+- **`interactive`** (strongly preferred for targeted questions) — opens
+  the region picker; the user drags a rectangle. Tell them *before*
+  dispatching that a picker will appear.
+  Pick it when the question is about:
+  - a single UI element: "il titolo del terminale", "il bottone login",
+    "l'icona nella taskbar", "la tab attiva"
+  - one area of the screen: "il menu settings", "la finestra di errore",
+    "il pannello laterale", "l'overlay in alto a destra"
+  - specific text / content: "cosa c'è scritto in quel popup",
+    "l'errore mostrato", "il valore in quel campo"
+- **`full`** — the whole monitor. Only when the question is genuinely
+  broad: "cosa c'è sullo schermo", "descrivi tutto ciò che vedi",
+  "controlla tutta la pagina", "fai una panoramica del desktop".
+- **`X,Y,W,H`** — explicit coordinates. Only when the main agent passes
+  them (rare; usually to repeat a previous pick).
+
+When in doubt between `full` and `interactive`, **choose `interactive`**.
+
+For webcam captures, ignore this step entirely.
+
 ## 3. Normalize parameters
 
 Apply this order of precedence:
@@ -53,18 +79,24 @@ SessionStart hook:
 $HOME/.local/state/claude-vision/bin/claude-vision <subcommand> <args...>
 ```
 
-Run **exactly one** of these, based on (source, mode):
+Run **exactly one** of these, based on (source, mode). The `$CV` shorthand
+stands for `$HOME/.local/state/claude-vision/bin/claude-vision`:
 
 | Source | Mode     | Command                                                          |
 |--------|----------|------------------------------------------------------------------|
-| screen | snapshot | `$HOME/.local/state/claude-vision/bin/claude-vision screenshot --scale-width <S>` |
-| screen | video    | `$HOME/.local/state/claude-vision/bin/claude-vision capture --duration <D> --fps <F> --scale-width <S>` |
-| webcam | snapshot | `$HOME/.local/state/claude-vision/bin/claude-vision webcam-snapshot --scale-width <S>` |
-| webcam | video    | `$HOME/.local/state/claude-vision/bin/claude-vision webcam-capture --duration <D> --fps <F> --scale-width <S>` |
+| screen | snapshot | `$CV screenshot --scale-width <S>`                               |
+| screen | video    | `$CV capture --duration <D> --fps <F> --scale-width <S>`         |
+| webcam | snapshot | `$CV webcam-snapshot --scale-width <S>`                          |
+| webcam | video    | `$CV webcam-capture --duration <D> --fps <F> --scale-width <S>`  |
 
-Append `--monitor <N>` (screen) or `--device <N>` (webcam) only if the main
-agent specified a non-zero index. Parse the JSON output to obtain
-`session_id` and either `frame` (snapshot) or `frames[]` (video).
+Append flags when relevant:
+- `--region interactive` — opens the picker (screen only)
+- `--region X,Y,W,H` — explicit region (screen only)
+- `--monitor <N>` — non-primary monitor (screen only)
+- `--device <N>` — non-default webcam (webcam only)
+
+Parse the JSON output to obtain `session_id` and either `frame` (snapshot)
+or `frames[]` (video).
 
 Errors to surface verbatim and stop:
 
@@ -76,6 +108,8 @@ Errors to surface verbatim and stop:
 - `WebcamPermissionError` — close other camera apps; on macOS grant Camera in
   System Settings > Privacy & Security; do not run CC over SSH
 - `CaptureError: webcam device N not available` — try `--device 0` or enumerate
+- `CaptureError: region selection cancelled` — the user pressed Esc in the
+  picker; ask them to retry without region, or guide them on what to select
 - macOS "Screen Recording" permission — grant the terminal access in
   System Settings > Privacy & Security > Screen Recording
 

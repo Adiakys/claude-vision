@@ -29,7 +29,25 @@ First choose the **source**:
 | Digital content: UI, pages, apps, terminal, code     | screen  |
 | The user themselves, their face, an object, the room | webcam  |
 
-Then the **mode** (prefer snapshot/single-frame whenever possible — faster
+Then the **region** (screen only — skip for webcam). **Strong preference
+for `interactive` whenever the user is asking about a specific thing**:
+
+| Situation                                           | Region      |
+|-----------------------------------------------------|-------------|
+| "Cosa c'è scritto come titolo del terminale?"       | interactive |
+| "Guarda il bottone login"                           | interactive |
+| "Che errore mostra questa finestra?"                | interactive |
+| "Cosa dice il popup?" / "il valore di quel campo"   | interactive |
+| "La tab attiva del browser"                         | interactive |
+| "Cosa c'è sullo schermo?" / panoramica              | full        |
+| "Descrivi tutto ciò che vedi"                       | full        |
+| "Controlla tutta la pagina"                         | full        |
+
+When in doubt between `full` and `interactive`, pick `interactive`:
+full captures cost ~10× more tokens for zero added signal on focused
+questions.
+
+Finally the **mode** (prefer snapshot/single-frame whenever possible — faster
 and cheaper than a video):
 
 | Situation                                           | Mode       | Hints                 |
@@ -43,6 +61,9 @@ and cheaper than a video):
 | "Registra mentre saluto" / webcam motion            | video      | `duration: 3-5s, fps: 2-3` |
 | Long workflow                                       | video      | `duration: 20-30s`    |
 
+If you pick `region: interactive`, tell the user in your turn-reply that a
+picker will appear and to drag a rectangle around the area of interest.
+
 If you cannot sensibly choose duration/fps for video mode, ask the user
 **one** short question.
 
@@ -55,6 +76,7 @@ Visual question: <your question>
 
 Source: screen | webcam
 Mode:   snapshot | video
+Region: full | interactive | X,Y,W,H        (screen only)
 Hints (optional):
 - duration: <seconds>       (video only)
 - fps: <frames per second>  (video only)

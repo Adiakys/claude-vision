@@ -15,7 +15,10 @@ from .config import CaptureConfig
 from .errors import ClaudeVisionError
 from .platform_detect import detect, preflight
 from .recorders import select_recorder
+from .region import Region, pick_interactive
 from .session import Session
+
+REGION_INTERACTIVE_KEYWORD = "interactive"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,6 +44,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Target width in pixels; 0 disables resize",
     )
     capture.add_argument("--monitor", type=int, default=0)
+    capture.add_argument(
+        "--region", type=str, default=None,
+        help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
+    )
     capture.set_defaults(handler=_cmd_capture)
 
     shot = sub.add_parser("screenshot", help="Grab a single frame")
@@ -49,6 +56,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Target width in pixels; 0 disables resize",
     )
     shot.add_argument("--monitor", type=int, default=0)
+    shot.add_argument(
+        "--region", type=str, default=None,
+        help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
+    )
     shot.set_defaults(handler=_cmd_screenshot)
 
     wshot = sub.add_parser("webcam-snapshot", help="Grab a single frame from the webcam")
@@ -91,6 +102,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         max_frames=args.max_frames,
         scale_width=args.scale_width,
         monitor_index=args.monitor,
+        region=_resolve_region(args.region),
     )
 
     session = Session.create(config)
@@ -112,6 +124,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         "scale_width": config.scale_width,
         "platform": platform.value,
         "source": "screen",
+        "region": _region_to_dict(config.region),
     })
     return 0
 
@@ -123,6 +136,7 @@ def _cmd_screenshot(args: argparse.Namespace) -> int:
     config = CaptureConfig(
         scale_width=args.scale_width,
         monitor_index=args.monitor,
+        region=_resolve_region(args.region),
     )
 
     session = Session.create(config)
@@ -141,6 +155,7 @@ def _cmd_screenshot(args: argparse.Namespace) -> int:
         "scale_width": config.scale_width,
         "platform": platform.value,
         "source": "screen",
+        "region": _region_to_dict(config.region),
     })
     return 0
 
@@ -222,6 +237,19 @@ def _resolve_session(identifier: str) -> Path:
         return as_path
     root = Path(tempfile.gettempdir()) / "claude-vision"
     return root / f"{SESSION_PREFIX}{identifier}"
+
+
+def _resolve_region(spec: str | None) -> Region | None:
+    """CLI-layer glue: 'interactive' runs the picker; 'X,Y,W,H' parses coords."""
+    if spec is None:
+        return None
+    if spec == REGION_INTERACTIVE_KEYWORD:
+        return pick_interactive()
+    return Region.parse(spec)
+
+
+def _region_to_dict(region: Region | None) -> dict[str, int] | None:
+    return region.as_mss_dict() if region is not None else None
 
 
 def _emit(payload: dict) -> None:

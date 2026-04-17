@@ -20,10 +20,6 @@ set -eu
 STATE="${HOME}/.local/state/claude-vision"
 LIB="${STATE}/lib"
 BINDIR="${STATE}/bin"
-HASH="$(sha256sum "${CLAUDE_PLUGIN_ROOT}/pyproject.toml" | cut -c1-12)"
-MARKER="${STATE}/.installed-${HASH}"
-
-[ -f "${MARKER}" ] && exit 0
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "claude-vision: python3 is required (>= 3.10)" >&2
@@ -35,6 +31,24 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
     exit 1
 fi
 
+# tkinter ships with Python's stdlib but Debian/Ubuntu split it out as
+# python3-tk. When it's missing we pull pygame-ce as the fallback picker —
+# only ~25MB, only where actually needed.
+EXTRAS="wayland,webcam"
+if ! python3 -c "import tkinter" 2>/dev/null; then
+    EXTRAS="${EXTRAS},picker"
+fi
+
+# Include the extras set in the install hash so that gaining or losing tkinter
+# on the user's system triggers a fresh reinstall with the right extras.
+HASH="$(
+    { cat "${CLAUDE_PLUGIN_ROOT}/pyproject.toml"; printf 'extras=%s\n' "${EXTRAS}"; } \
+    | sha256sum | cut -c1-12
+)"
+MARKER="${STATE}/.installed-${HASH}"
+
+[ -f "${MARKER}" ] && exit 0
+
 mkdir -p "${STATE}" "${BINDIR}"
 rm -rf "${LIB}"
 mkdir -p "${LIB}"
@@ -44,7 +58,7 @@ python3 -m pip install \
     --target="${LIB}" \
     --break-system-packages \
     --upgrade \
-    "${CLAUDE_PLUGIN_ROOT}[wayland,webcam]" >&2
+    "${CLAUDE_PLUGIN_ROOT}[${EXTRAS}]" >&2
 
 # Self-contained wrapper. Hard-codes ${LIB} so it works regardless of
 # env vars — critical for subagents that don't inherit CLAUDE_PLUGIN_*.

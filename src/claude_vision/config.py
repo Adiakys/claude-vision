@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import InvalidConfigError
+from .region import Region
 
 MAX_DURATION_S = 120.0
 MAX_FRAMES_CAP = 24
@@ -30,6 +31,7 @@ class CaptureConfig:
     scale_width: int = 1568
     monitor_index: int = 0
     device_index: int = 0
+    region: Region | None = None
     session_root: Path = field(default_factory=_default_session_root)
 
     def __post_init__(self) -> None:

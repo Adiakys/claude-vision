@@ -36,6 +36,8 @@ class MssRecorder(ScreenRecorder):
             return self._grab_and_save(sct, monitor, 0)
 
     def _select_monitor(self, sct: "mss.base.MSSBase") -> dict:
+        if self.config.region is not None:
+            return self.config.region.as_mss_dict()
         monitors = sct.monitors
         index = self.config.monitor_index
         if index == 0:

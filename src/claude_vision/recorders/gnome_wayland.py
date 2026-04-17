@@ -20,6 +20,7 @@ STOP_METHOD = "org.gnome.Shell.Screencast.StopScreencast"
 SHOT_DEST = "org.gnome.Shell.Screenshot"
 SHOT_PATH = "/org/gnome/Shell/Screenshot"
 SHOT_METHOD = "org.gnome.Shell.Screenshot.Screenshot"
+SHOT_AREA_METHOD = "org.gnome.Shell.Screenshot.ScreenshotArea"
 
 
 class GnomeWaylandRecorder(ScreenRecorder):
@@ -47,23 +48,40 @@ class GnomeWaylandRecorder(ScreenRecorder):
 
     def screenshot(self) -> Path:
         output = self.session.frames_dir / "frame_0000.png"
-        cmd = [
-            "gdbus", "call", "--session",
-            "--dest", SHOT_DEST,
-            "--object-path", SHOT_PATH,
-            "--method", SHOT_METHOD,
-            "true", "false", str(output),
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0 or not output.exists():
-            raise CaptureError(
-                f"GNOME Screenshot failed: {result.stderr.strip() or 'no output file'}"
-            )
+        self._gdbus_screenshot(output)
         if self.config.scale_width > 0:
             image = Image.open(output)
             image = _maybe_resize(image, self.config.scale_width)
             image.save(output, "PNG", optimize=True)
         return output
+
+    def _gdbus_screenshot(self, output: Path) -> None:
+        """Dispatch to ScreenshotArea when a region is configured, else Screenshot."""
+        region = self.config.region
+        if region is None:
+            cmd = [
+                "gdbus", "call", "--session",
+                "--dest", SHOT_DEST,
+                "--object-path", SHOT_PATH,
+                "--method", SHOT_METHOD,
+                "true", "false", str(output),
+            ]
+        else:
+            # ScreenshotArea(x, y, width, height, flash, filename)
+            cmd = [
+                "gdbus", "call", "--session",
+                "--dest", SHOT_DEST,
+                "--object-path", SHOT_PATH,
+                "--method", SHOT_AREA_METHOD,
+                str(region.left), str(region.top),
+                str(region.width), str(region.height),
+                "false", str(output),
+            ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0 or not output.exists():
+            raise CaptureError(
+                f"GNOME Screenshot failed: {result.stderr.strip() or 'no output file'}"
+            )
 
     def _start_screencast(self, webm: Path, fps: float) -> None:
         options = (
@@ -96,11 +114,16 @@ class GnomeWaylandRecorder(ScreenRecorder):
     def _extract_frames(self, imageio, webm: Path) -> list[Path]:
         max_frames = self.config.max_frames
         scale_width = self.config.scale_width
+        region = self.config.region
         frames: list[Path] = []
         for idx, array in enumerate(imageio.imiter(webm, plugin="pyav")):
             if idx >= max_frames:
                 break
             image = Image.fromarray(array)
+            # GNOME Screencast D-Bus has no region option, so we crop
+            # post-decode. mss path uses native region; stays symmetric.
+            if region is not None:
+                image = image.crop(region.as_pil_bbox())
             image = _maybe_resize(image, scale_width)
             path = self.session.frames_dir / f"frame_{idx:04d}.png"
             image.save(path, "PNG", optimize=True)
