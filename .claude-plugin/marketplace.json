@@ -1,0 +1,16 @@
+{
+  "name": "claude-vision",
+  "owner": {
+    "name": "Adiakys",
+    "email": "andreaficarra05@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "claude-vision",
+      "source": "./",
+      "description": "Let Claude see your screen or webcam. Dispatches a subagent that captures, analyzes frames, and returns a compact report.",
+      "version": "0.2.0",
+      "category": "productivity"
+    }
+  ]
+}

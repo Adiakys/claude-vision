@@ -45,19 +45,22 @@ Apply this order of precedence:
 
 ## 4. Capture
 
-Pick the Python interpreter in this order — first one that works:
+Always invoke the plugin's wrapper script — it sets up `PYTHONPATH` so Python
+finds the libraries installed into `${CLAUDE_PLUGIN_DATA}/lib` by the
+SessionStart hook:
 
-1. `$CLAUDE_PROJECT_DIR/.venv/bin/python` (project venv — preferred)
-2. `python3` (system / user install)
+```
+${CLAUDE_PLUGIN_ROOT}/bin/claude-vision <subcommand> <args...>
+```
 
-Then run **exactly one** of these, based on (source, mode):
+Run **exactly one** of these, based on (source, mode):
 
 | Source | Mode     | Command                                                          |
 |--------|----------|------------------------------------------------------------------|
-| screen | snapshot | `<PY> -m claude_vision screenshot --scale-width <S>`             |
-| screen | video    | `<PY> -m claude_vision capture --duration <D> --fps <F> --scale-width <S>` |
-| webcam | snapshot | `<PY> -m claude_vision webcam-snapshot --scale-width <S>`        |
-| webcam | video    | `<PY> -m claude_vision webcam-capture --duration <D> --fps <F> --scale-width <S>` |
+| screen | snapshot | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision screenshot --scale-width <S>` |
+| screen | video    | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision capture --duration <D> --fps <F> --scale-width <S>` |
+| webcam | snapshot | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision webcam-snapshot --scale-width <S>` |
+| webcam | video    | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision webcam-capture --duration <D> --fps <F> --scale-width <S>` |
 
 Append `--monitor <N>` (screen) or `--device <N>` (webcam) only if the main
 agent specified a non-zero index. Parse the JSON output to obtain
@@ -65,18 +68,16 @@ agent specified a non-zero index. Parse the JSON output to obtain
 
 Errors to surface verbatim and stop:
 
-- `ModuleNotFoundError: claude_vision` → activate venv or `pip install --user`
-- `PlatformUnsupportedError` mentioning `[webcam]` extra → `pip install .[webcam]`
-- `PlatformUnsupportedError` mentioning `[wayland]` extra → `pip install .[wayland]`
-- `WebcamPermissionError` → close other camera apps; on macOS grant Camera in
+- `ModuleNotFoundError: claude_vision` — the SessionStart bootstrap hasn't
+  finished or failed. Tell the user to restart Claude Code, or check
+  `${CLAUDE_PLUGIN_DATA}/lib` exists
+- `PlatformUnsupportedError: Wayland non-GNOME` — user must log into an X11
+  session (not supported on KDE/Sway/Hyprland Wayland)
+- `WebcamPermissionError` — close other camera apps; on macOS grant Camera in
   System Settings > Privacy & Security; do not run CC over SSH
-- `CaptureError: webcam device N not available` → try `--device 0` or enumerate
-
-Typical errors to surface verbatim to the main agent and stop:
-
-- `PlatformUnsupportedError` with a Wayland/GNOME message
-- `PlatformUnsupportedError` asking to install `[wayland]` extra
-- macOS "Screen Recording" permission errors
+- `CaptureError: webcam device N not available` — try `--device 0` or enumerate
+- macOS "Screen Recording" permission — grant the terminal access in
+  System Settings > Privacy & Security > Screen Recording
 
 ## 5. Analyze
 
@@ -93,10 +94,10 @@ Then answer the main agent's visual question:
 
 ## 6. Cleanup
 
-Before returning, always run (using the same interpreter you picked in step 2):
+Before returning, always run:
 
 ```
-<PY> -m claude_vision clean --session <session_id>
+${CLAUDE_PLUGIN_ROOT}/bin/claude-vision clean --session <session_id>
 ```
 
 If capture failed before producing `session_id`, skip this step; the `Stop`

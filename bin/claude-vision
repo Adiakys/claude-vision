@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#
+# Wrapper that runs claude-vision with the plugin-local libraries on PYTHONPATH.
+# The SessionStart hook installs the package into ${CLAUDE_PLUGIN_DATA}/lib;
+# this script just points Python at that location and forwards args.
+
+set -eu
+
+if [ -n "${CLAUDE_PLUGIN_DATA:-}" ] && [ -d "${CLAUDE_PLUGIN_DATA}/lib" ]; then
+    export PYTHONPATH="${CLAUDE_PLUGIN_DATA}/lib${PYTHONPATH:+:${PYTHONPATH}}"
+fi
+
+exec python3 -m claude_vision "$@"

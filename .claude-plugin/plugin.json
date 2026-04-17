@@ -1,0 +1,19 @@
+{
+  "name": "claude-vision",
+  "version": "0.2.0",
+  "description": "Lets Claude Code see — screen captures and webcam frames analyzed by a dedicated subagent, returning a compact textual report.",
+  "author": {
+    "name": "Adiakys",
+    "email": "andreaficarra05@gmail.com"
+  },
+  "homepage": "https://github.com/Adiakys/claude-vision",
+  "repository": "https://github.com/Adiakys/claude-vision",
+  "license": "MIT",
+  "keywords": [
+    "vision",
+    "screen-capture",
+    "webcam",
+    "screenshot",
+    "skill"
+  ]
+}

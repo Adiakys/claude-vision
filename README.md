@@ -11,52 +11,51 @@ dedicated subagent and returns only a compact textual report.
 ## How it works
 
 1. Skill `screen-vision` auto-activates when Claude recognizes a visual request
-   ("what's on my screen?", "does this header look right?", …).
+   ("what's on my screen?", "puoi vedermi?", "does this header look right?", …).
 2. Claude dispatches the `frame-analyst` subagent with the visual question.
-3. The subagent picks the mode:
-   - **`screenshot`** (default) — one frame, fast, cheap.
-   - **`capture`** (video) — multiple frames when motion matters.
+3. The subagent picks source and mode:
+   - Source: **`screen`** (UI, pages, terminal) or **`webcam`** (face, object, room).
+   - Mode: **`snapshot`** (default, one frame) or **`video`** (multiple frames when
+     motion matters).
 4. The subagent runs the `claude_vision` CLI, reads the frames, and produces a
-   compact textual report.
+   compact textual report — no image data leaks into the main-agent context.
 5. A `Stop` hook garbage-collects any leftover session directories.
 
-## Install
+## Install as a Claude Code plugin
 
-Pick the install that matches your system, then make sure Claude Code sees it.
-
-```bash
-# X11 / macOS / Windows — project venv (recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-
-# GNOME Wayland — uses org.gnome.Shell.Screencast
-pip install -e ".[wayland]"
-
-# Webcam support — uses OpenCV
-pip install -e ".[webcam]"
-
-# Everything
-pip install -e ".[wayland,webcam]"
+```
+/plugin marketplace add Adiakys/claude-vision
+/plugin install claude-vision@claude-vision
 ```
 
-### Making the subagent find the package
+At the next session start, the plugin bootstraps itself: it runs
+`pip install --target` to place `mss`, `Pillow`, `imageio` and `opencv-python-headless`
+into `${CLAUDE_PLUGIN_DATA}/lib` — isolated, no venv, no global `site-packages`
+pollution, no tools to install besides `python3` (3.10+) and `pip`, both
+available by default on every supported OS.
 
-The `frame-analyst` subagent runs `python3 -m claude_vision ...`. Two ways to
-guarantee it resolves:
-
-1. **Activate the venv before launching Claude Code** — `source .venv/bin/activate`
-   and then `claude`. The subagent's `python3` will point at the venv.
-2. **Or install user-local** — `pip install --user --break-system-packages -e .`
-   so any `python3` finds it.
-
-The subagent will also try `$CLAUDE_PROJECT_DIR/.venv/bin/python` first as a
-fallback, so the first option works even if you launch CC without activating.
-
-Check your Linux session type with `echo $XDG_SESSION_TYPE`.
+First session start takes ~20–30 seconds while pip downloads; subsequent
+starts are instant (a hash marker skips reinstall until `pyproject.toml`
+changes).
 
 **Supported environments**: X11, macOS, Windows, GNOME Wayland.
 Not supported: KDE/Sway/Hyprland Wayland sessions.
+
+Check your Linux session type with `echo $XDG_SESSION_TYPE`.
+
+## Standalone CLI (optional)
+
+The Python package also works standalone if you want the CLI outside Claude
+Code — for debugging, scripts, or CI:
+
+```bash
+git clone https://github.com/Adiakys/claude-vision
+cd claude-vision
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[wayland,webcam]"
+python -m claude_vision --help
+```
 
 ## CLI
 
@@ -126,20 +125,28 @@ python -c "import cv2; [print(i, cv2.VideoCapture(i).isOpened()) for i in range(
 
 ```
 claude-vision/
-├── .claude/
-│   ├── skills/screen-vision/SKILL.md   # auto-dispatcher (tool Task only)
-│   ├── agents/frame-analyst.md         # subagent that owns the full pipeline
-│   ├── hooks/cleanup_sessions.py       # Stop hook (stdlib-only safety net)
-│   └── settings.json                   # hook + permissions
+├── .claude-plugin/
+│   ├── plugin.json                     # plugin manifest
+│   └── marketplace.json                # single-plugin marketplace manifest
+├── skills/screen-vision/SKILL.md       # auto-dispatcher (tool Task only)
+├── agents/frame-analyst.md             # subagent that owns the full pipeline
+├── hooks/
+│   ├── hooks.json                      # SessionStart + Stop hook registration
+│   ├── bootstrap.sh                    # pip install --target into plugin data dir
+│   └── cleanup_sessions.py             # Stop hook (stdlib-only)
+├── bin/claude-vision                   # shell wrapper: sets PYTHONPATH and runs python3 -m claude_vision
 ├── src/claude_vision/
 │   ├── config.py, session.py, errors.py
 │   ├── platform_detect.py              # X11 / macOS / Windows / GNOME Wayland
 │   ├── cleaner.py, cli.py, __main__.py
-│   └── recorders/
-│       ├── base.py                     # ABC: capture() + screenshot()
-│       ├── mss_recorder.py             # mss + Pillow
-│       └── gnome_wayland.py            # D-Bus Screencast + Screenshot
-├── tests/                              # 30 stdlib-only tests
+│   ├── recorders/
+│   │   ├── base.py                     # ABC: capture() + screenshot()
+│   │   ├── mss_recorder.py             # mss + Pillow (screen)
+│   │   └── gnome_wayland.py            # D-Bus Screencast + Screenshot
+│   └── cameras/
+│       ├── base.py                     # ABC: snapshot() + record()
+│       └── opencv_camera.py            # OpenCV (webcam, cross-platform)
+├── tests/                              # 39 stdlib-only tests
 ├── pyproject.toml
 └── README.md
 ```
