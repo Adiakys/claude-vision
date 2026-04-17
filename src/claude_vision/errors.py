@@ -15,3 +15,7 @@ class PlatformUnsupportedError(ClaudeVisionError):
 
 class CaptureError(ClaudeVisionError):
     """A runtime failure occurred during the capture pipeline."""
+
+
+class WebcamPermissionError(CaptureError):
+    """Webcam access denied by OS (macOS TCC) or device busy (held by another app)."""

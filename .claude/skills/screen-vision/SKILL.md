@@ -1,35 +1,46 @@
 ---
 name: screen-vision
-description: Use when Claude needs to visually see the user's screen - debugging UI bugs, verifying rendered web pages or dev servers, checking what an app looks like, diagnosing visual layout issues, confirming a screenshot matches expectations, inspecting a running application, or any task where "look at my screen", "see what I see", "check how this renders", "what does it look like now", "guarda lo schermo", "cosa vedi" is implied. Dispatches the frame-analyst subagent, which captures the screen, analyzes the frames, and returns a compact textual report — the main-agent context stays clean.
+description: Use when Claude needs visual information - either from the user's SCREEN (UI debugging, verifying rendered web pages or dev servers, checking app rendering, layout issues, "what's on my screen?", "guarda la pagina", "cosa vedi sullo schermo?") OR from the LAPTOP WEBCAM (seeing the user, physical objects held up to the camera, the room: "puoi vedermi?", "guarda la mia faccia", "come mi vedi?", "cosa ho in mano?", "look at me", "describe what I'm holding"). Dispatches the frame-analyst subagent, which picks source (screen vs webcam) and mode (single frame vs short video), captures, analyzes, and returns a compact textual report — the main-agent context stays clean.
 allowed-tools: Task
 ---
 
 # screen-vision
 
-You need to look at the user's screen. **Delegate the entire visual pipeline to
-the `frame-analyst` subagent** — do not call the CLI yourself. This keeps the
-main conversation context free of frame paths and tool JSON.
+You need visual information about the user's screen or their physical
+surroundings (webcam). **Delegate the entire pipeline to the `frame-analyst`
+subagent** — do not call the CLI yourself. This keeps the main conversation
+context free of frame paths and tool JSON.
 
 ## Step 1 — Form the visual question
 
 Write one concrete, answerable question. Examples:
 
-- "Is the navbar horizontally centered on the page?"
-- "How many buttons are visible in the toolbar, and are any disabled?"
-- "Does the modal overlay cover the full viewport?"
+- Screen: "Is the navbar horizontally centered on the page?"
+- Screen: "How many buttons are visible in the toolbar?"
+- Webcam: "What am I holding up to the camera?"
+- Webcam: "Is the person smiling?"
 
-## Step 2 — Pick the mode and parameter hints
+## Step 2 — Pick source, mode, and parameter hints
 
-**Prefer `screenshot` over `video` whenever possible.** A single frame is
-faster, cheaper, and just as informative for static questions.
+First choose the **source**:
+
+| Question is about…                                   | Source  |
+|------------------------------------------------------|---------|
+| Digital content: UI, pages, apps, terminal, code     | screen  |
+| The user themselves, their face, an object, the room | webcam  |
+
+Then the **mode** (prefer snapshot/single-frame whenever possible — faster
+and cheaper than a video):
 
 | Situation                                           | Mode       | Hints                 |
 |-----------------------------------------------------|------------|-----------------------|
-| "What's on my screen?" / static content / layout    | screenshot | —                     |
-| "How does this page look?" / dialog / error message | screenshot | —                     |
-| Small text / pixel-level inspection                 | screenshot | `resolution: full`    |
-| User will click or interact                         | video      | `duration: 10s, fps: 2` |
+| "What's on my screen?" / static content / layout    | snapshot   | —                     |
+| "How does this page look?" / dialog / error message | snapshot   | —                     |
+| Small text / pixel-level inspection                 | snapshot   | `resolution: full`    |
+| "Puoi vedermi?" / "Cosa ho in mano?"                | snapshot   | —                     |
+| User will click or interact (screen)                | video      | `duration: 10s, fps: 2` |
 | Animation, transition, loading flow                 | video      | `duration: 5-10s, fps: 3` |
+| "Registra mentre saluto" / webcam motion            | video      | `duration: 3-5s, fps: 2-3` |
 | Long workflow                                       | video      | `duration: 20-30s`    |
 
 If you cannot sensibly choose duration/fps for video mode, ask the user
@@ -42,16 +53,18 @@ Call the `Task` tool with `subagent_type=frame-analyst` and a prompt of the form
 ```
 Visual question: <your question>
 
-Mode: screenshot | video
+Source: screen | webcam
+Mode:   snapshot | video
 Hints (optional):
 - duration: <seconds>       (video only)
 - fps: <frames per second>  (video only)
 - resolution: full | high | medium | low
-- monitor: <index if not the primary>
+- monitor: <screen index, default 0>
+- device: <webcam index, default 0>
 ```
 
-If you leave `Mode` out the subagent will default to `screenshot` unless the
-question clearly requires temporal information.
+If you leave `Source` / `Mode` out, the subagent infers from the question and
+defaults to `snapshot`.
 
 ## Step 4 — Relay the result
 

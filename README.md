@@ -32,6 +32,12 @@ pip install -e .
 
 # GNOME Wayland — uses org.gnome.Shell.Screencast
 pip install -e ".[wayland]"
+
+# Webcam support — uses OpenCV
+pip install -e ".[webcam]"
+
+# Everything
+pip install -e ".[wayland,webcam]"
 ```
 
 ### Making the subagent find the package
@@ -54,19 +60,38 @@ Not supported: KDE/Sway/Hyprland Wayland sessions.
 
 ## CLI
 
+### Screen
+
 ```bash
 # Single screenshot (preferred when temporal info is not needed)
 python -m claude_vision screenshot --scale-width 1568
 
-# Video: capture 5 seconds at 1 fps, resize frames to 1568px wide
+# Video: 5 seconds at 1 fps, frames resized to 1568px wide
 python -m claude_vision capture --duration 5 --fps 1 --scale-width 1568
 
-# Capture at full native resolution (no resize)
+# Full native resolution (no resize)
 python -m claude_vision capture --duration 3 --scale-width 0
 
-# Pick a non-primary monitor
+# Non-primary monitor
 python -m claude_vision capture --duration 5 --monitor 1
+```
 
+### Webcam
+
+```bash
+# Single webcam photo (preferred for static questions)
+python -m claude_vision webcam-snapshot --scale-width 1568
+
+# Short webcam video (3s at 2fps)
+python -m claude_vision webcam-capture --duration 3 --fps 2 --scale-width 1568
+
+# Non-default webcam (e.g., external USB at index 1)
+python -m claude_vision webcam-snapshot --device 1
+```
+
+### Housekeeping
+
+```bash
 # Delete a session's files
 python -m claude_vision clean --session <session-id-or-path>
 
@@ -76,21 +101,26 @@ python -m claude_vision gc --ttl-hours 2
 
 All commands emit JSON on stdout.
 
-### Discovering monitor indices
+### Discovering monitor / device indices
 
 ```bash
+# Screen monitors
 python -c "import mss; print(mss.mss().monitors)"
+
+# Webcam devices (first 5 indices)
+python -c "import cv2; [print(i, cv2.VideoCapture(i).isOpened()) for i in range(5)]"
 ```
 
 ## Parameters
 
 | Option          | Default | Meaning                                             |
 |-----------------|---------|-----------------------------------------------------|
-| `--duration`    | —       | Seconds to capture (required for `capture`; max 120)|
+| `--duration`    | —       | Seconds to capture (required for video; max 120)    |
 | `--fps`         | 1.0     | Frames per second                                   |
 | `--max-frames`  | 24      | Hard cap on emitted frames                          |
 | `--scale-width` | 1568    | Target width in pixels; `0` disables resize         |
-| `--monitor`     | 0       | Monitor index (0 = primary)                         |
+| `--monitor`     | 0       | Monitor index for screen commands (0 = primary)     |
+| `--device`      | 0       | Webcam device index for webcam commands             |
 
 ## Layout
 
@@ -117,8 +147,22 @@ claude-vision/
 ## macOS first-run note
 
 macOS will prompt for Screen Recording permission the first time you run
-`capture` or `screenshot`. Grant it to your terminal application in
-*System Settings → Privacy & Security → Screen Recording*.
+`capture` or `screenshot`, and for Camera permission the first time you run
+`webcam-snapshot` or `webcam-capture`. Grant both to your terminal application
+in *System Settings → Privacy & Security*.
+
+The TCC permission prompt requires a graphical session. If you run Claude
+Code over SSH, webcam calls will hang on the first read; run CC locally
+instead.
+
+## Webcam troubleshooting
+
+| Symptom                                              | Fix                                                                 |
+|------------------------------------------------------|---------------------------------------------------------------------|
+| `PlatformUnsupportedError: install [webcam]`         | `pip install -e ".[webcam]"`                                        |
+| `CaptureError: webcam device N not available`        | Wrong index — enumerate devices as shown above                      |
+| `WebcamPermissionError: webcam busy or permission…`  | Close browsers / Zoom / OBS / other camera apps, or grant Camera permission |
+| Very dark first frames                               | Raise room lighting; the tool already discards 5 warmup frames      |
 
 ## License
 

@@ -29,6 +29,7 @@ class CaptureConfig:
     max_frames: int = MAX_FRAMES_CAP
     scale_width: int = 1568
     monitor_index: int = 0
+    device_index: int = 0
     session_root: Path = field(default_factory=_default_session_root)
 
     def __post_init__(self) -> None:
@@ -49,6 +50,10 @@ class CaptureConfig:
         if self.monitor_index < 0:
             raise InvalidConfigError(
                 f"monitor_index must be >= 0; got {self.monitor_index}"
+            )
+        if self.device_index < 0:
+            raise InvalidConfigError(
+                f"device_index must be >= 0; got {self.device_index}"
             )
 
     def effective_fps(self) -> float:

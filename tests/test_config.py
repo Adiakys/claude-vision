@@ -43,6 +43,7 @@ def test_scale_width_zero_allowed_as_full_res_sentinel():
         {"duration_s": 5, "max_frames": MAX_FRAMES_CAP + 1},
         {"duration_s": 5, "scale_width": -1},
         {"duration_s": 5, "monitor_index": -1},
+        {"duration_s": 5, "device_index": -1},
     ],
 )
 def test_invalid_values_raise(kwargs):
