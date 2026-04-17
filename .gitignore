@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+.deps/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Claude Code — user-local settings (not shared)
+.claude/settings.local.json
+
+# Runtime artifacts
+*.webm

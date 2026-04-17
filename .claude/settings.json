@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m claude_vision:*)",
+      "Bash(python -m claude_vision:*)",
+      "Bash(*/.venv/bin/python -m claude_vision:*)",
+      "Bash($CLAUDE_PROJECT_DIR/.venv/bin/python -m claude_vision:*)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/cleanup_sessions.py"
+          }
+        ]
+      }
+    ]
+  }
+}
