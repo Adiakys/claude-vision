@@ -29,12 +29,17 @@ dedicated subagent and returns only a compact textual report.
 ```
 
 At the next session start, the plugin bootstraps itself: it runs
-`pip install --target` to place `mss`, `Pillow`, `imageio` and `opencv-python-headless`
-into `${CLAUDE_PLUGIN_DATA}/lib` — isolated, no venv, no global `site-packages`
-pollution, no tools to install besides `python3` (3.10+) and `pip`, both
-available by default on every supported OS.
+`pip install --target` to place `mss`, `Pillow`, `imageio` and
+`opencv-python-headless` into `~/.local/state/claude-vision/lib/` — isolated,
+no venv, no global `site-packages` pollution, no tools to install besides
+`python3` (3.10+) and `pip`, both available by default on every supported OS.
 
-First session start takes ~20–30 seconds while pip downloads; subsequent
+It also writes a self-contained wrapper script at
+`~/.local/state/claude-vision/bin/claude-vision` that the subagent invokes
+directly; this path survives plugin updates and doesn't depend on any
+Claude-Code-specific environment variable.
+
+First session start takes ~10 seconds while pip downloads; subsequent
 starts are instant (a hash marker skips reinstall until `pyproject.toml`
 changes).
 

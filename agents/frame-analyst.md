@@ -50,17 +50,17 @@ finds the libraries installed into `${CLAUDE_PLUGIN_DATA}/lib` by the
 SessionStart hook:
 
 ```
-${CLAUDE_PLUGIN_ROOT}/bin/claude-vision <subcommand> <args...>
+$HOME/.local/state/claude-vision/bin/claude-vision <subcommand> <args...>
 ```
 
 Run **exactly one** of these, based on (source, mode):
 
 | Source | Mode     | Command                                                          |
 |--------|----------|------------------------------------------------------------------|
-| screen | snapshot | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision screenshot --scale-width <S>` |
-| screen | video    | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision capture --duration <D> --fps <F> --scale-width <S>` |
-| webcam | snapshot | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision webcam-snapshot --scale-width <S>` |
-| webcam | video    | `${CLAUDE_PLUGIN_ROOT}/bin/claude-vision webcam-capture --duration <D> --fps <F> --scale-width <S>` |
+| screen | snapshot | `$HOME/.local/state/claude-vision/bin/claude-vision screenshot --scale-width <S>` |
+| screen | video    | `$HOME/.local/state/claude-vision/bin/claude-vision capture --duration <D> --fps <F> --scale-width <S>` |
+| webcam | snapshot | `$HOME/.local/state/claude-vision/bin/claude-vision webcam-snapshot --scale-width <S>` |
+| webcam | video    | `$HOME/.local/state/claude-vision/bin/claude-vision webcam-capture --duration <D> --fps <F> --scale-width <S>` |
 
 Append `--monitor <N>` (screen) or `--device <N>` (webcam) only if the main
 agent specified a non-zero index. Parse the JSON output to obtain
@@ -97,7 +97,7 @@ Then answer the main agent's visual question:
 Before returning, always run:
 
 ```
-${CLAUDE_PLUGIN_ROOT}/bin/claude-vision clean --session <session_id>
+$HOME/.local/state/claude-vision/bin/claude-vision clean --session <session_id>
 ```
 
 If capture failed before producing `session_id`, skip this step; the `Stop`

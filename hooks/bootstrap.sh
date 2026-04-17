@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 #
-# SessionStart hook: install the claude-vision Python package into the
-# plugin's data directory. Uses `pip install --target` so no venv is needed
-# and nothing outside ${CLAUDE_PLUGIN_DATA} is touched.
+# SessionStart hook: install the claude-vision Python package into a stable
+# location under $HOME/.local/state/claude-vision/, and generate a wrapper
+# script there with the lib path hard-coded.
 #
-# Idempotent: a marker file tied to the pyproject.toml hash means reinstall
-# only happens when deps actually change (plugin update).
+# Why $HOME-based instead of ${CLAUDE_PLUGIN_DATA}:
+# subagents (and the main agent's Bash tool) do not reliably inherit
+# CLAUDE_PLUGIN_* env vars — only hooks do. Using a fixed $HOME-based
+# path means the subagent can invoke the wrapper unambiguously without
+# depending on env vars at all.
+#
+# Idempotent: a marker file tied to the pyproject.toml hash means we
+# reinstall only when deps actually change.
 
 set -eu
 
 : "${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT not set}"
-: "${CLAUDE_PLUGIN_DATA:?CLAUDE_PLUGIN_DATA not set}"
 
-LIB="${CLAUDE_PLUGIN_DATA}/lib"
+STATE="${HOME}/.local/state/claude-vision"
+LIB="${STATE}/lib"
+BINDIR="${STATE}/bin"
 HASH="$(sha256sum "${CLAUDE_PLUGIN_ROOT}/pyproject.toml" | cut -c1-12)"
-MARKER="${LIB}/.installed-${HASH}"
+MARKER="${STATE}/.installed-${HASH}"
 
 [ -f "${MARKER}" ] && exit 0
 
@@ -28,12 +35,10 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
     exit 1
 fi
 
-# Clean any previous installation so stale files don't leak between versions.
+mkdir -p "${STATE}" "${BINDIR}"
 rm -rf "${LIB}"
 mkdir -p "${LIB}"
 
-# --break-system-packages is a no-op on non-PEP-668 envs; needed on Ubuntu 24.04+.
-# --target keeps the install fully inside the plugin's data dir.
 python3 -m pip install \
     --quiet \
     --target="${LIB}" \
@@ -41,5 +46,18 @@ python3 -m pip install \
     --upgrade \
     "${CLAUDE_PLUGIN_ROOT}[wayland,webcam]" >&2
 
+# Self-contained wrapper. Hard-codes ${LIB} so it works regardless of
+# env vars — critical for subagents that don't inherit CLAUDE_PLUGIN_*.
+cat > "${BINDIR}/claude-vision" <<EOF
+#!/usr/bin/env bash
+set -eu
+export PYTHONPATH="${LIB}\${PYTHONPATH:+:\${PYTHONPATH}}"
+exec python3 -m claude_vision "\$@"
+EOF
+chmod +x "${BINDIR}/claude-vision"
+
+# Drop stale markers from previous versions before placing the new one.
+find "${STATE}" -maxdepth 1 -name '.installed-*' -delete 2>/dev/null || true
 touch "${MARKER}"
-echo "claude-vision: installed to ${LIB}" >&2
+
+echo "claude-vision: installed to ${STATE}" >&2
