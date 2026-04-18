@@ -32,6 +32,8 @@ class CaptureConfig:
     monitor_index: int = 0
     device_index: int = 0
     region: Region | None = None
+    dedupe: bool = True
+    dedupe_threshold: float = 0.01
     session_root: Path = field(default_factory=_default_session_root)
 
     def __post_init__(self) -> None:
@@ -56,6 +58,10 @@ class CaptureConfig:
         if self.device_index < 0:
             raise InvalidConfigError(
                 f"device_index must be >= 0; got {self.device_index}"
+            )
+        if not 0.0 <= self.dedupe_threshold <= 1.0:
+            raise InvalidConfigError(
+                f"dedupe_threshold must be in [0, 1]; got {self.dedupe_threshold}"
             )
 
     def effective_fps(self) -> float:

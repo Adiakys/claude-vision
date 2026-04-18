@@ -15,6 +15,8 @@ class ScreenRecorder(ABC):
     def __init__(self, session: Session, config: CaptureConfig):
         self.session = session
         self.config = config
+        # Populated by capture() when dedupe is active; read by CLI.
+        self.stats: dict[str, int] = {}
 
     @abstractmethod
     def capture(self) -> list[Path]:

@@ -48,6 +48,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--region", type=str, default=None,
         help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
     )
+    capture.add_argument(
+        "--no-dedupe", dest="dedupe", action="store_false", default=True,
+        help="Keep every frame even if near-identical (default: drop duplicates)",
+    )
+    capture.add_argument(
+        "--dedupe-threshold", type=float, default=0.01,
+        help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
+    )
     capture.set_defaults(handler=_cmd_capture)
 
     shot = sub.add_parser("screenshot", help="Grab a single frame")
@@ -79,6 +87,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Target width in pixels; 0 disables resize",
     )
     wcap.add_argument("--device", type=int, default=0, help="Webcam device index")
+    wcap.add_argument(
+        "--no-dedupe", dest="dedupe", action="store_false", default=True,
+        help="Keep every frame even if near-identical (default: drop duplicates)",
+    )
+    wcap.add_argument(
+        "--dedupe-threshold", type=float, default=0.01,
+        help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
+    )
     wcap.set_defaults(handler=_cmd_webcam_capture)
 
     clean_cmd = sub.add_parser("clean", help="Delete a single session")
@@ -103,6 +119,8 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         scale_width=args.scale_width,
         monitor_index=args.monitor,
         region=_resolve_region(args.region),
+        dedupe=args.dedupe,
+        dedupe_threshold=args.dedupe_threshold,
     )
 
     session = Session.create(config)
@@ -125,6 +143,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         "platform": platform.value,
         "source": "screen",
         "region": _region_to_dict(config.region),
+        "dedupe": _dedupe_summary(config, recorder),
     })
     return 0
 
@@ -192,6 +211,8 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
         max_frames=args.max_frames,
         scale_width=args.scale_width,
         device_index=args.device,
+        dedupe=args.dedupe,
+        dedupe_threshold=args.dedupe_threshold,
     )
     session = Session.create(config)
     camera = select_camera(session, config)
@@ -212,6 +233,7 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
         "scale_width": config.scale_width,
         "device_index": config.device_index,
         "source": "webcam",
+        "dedupe": _dedupe_summary(config, camera),
     })
     return 0
 
@@ -250,6 +272,14 @@ def _resolve_region(spec: str | None) -> Region | None:
 
 def _region_to_dict(region: Region | None) -> dict[str, int] | None:
     return region.as_mss_dict() if region is not None else None
+
+
+def _dedupe_summary(config: CaptureConfig, capturer) -> dict:
+    summary = {"enabled": config.dedupe, "threshold": config.dedupe_threshold}
+    if config.dedupe and getattr(capturer, "stats", None):
+        summary["kept"] = capturer.stats.get("kept")
+        summary["skipped"] = capturer.stats.get("skipped")
+    return summary
 
 
 def _emit(payload: dict) -> None:

@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 from ..errors import CaptureError, PlatformUnsupportedError, WebcamPermissionError
-from ..recorders.mss_recorder import _maybe_resize
+from ..recorders.mss_recorder import _deduper_stats, _maybe_deduper, _maybe_resize
 from .base import WebcamCamera
 
 # Logitech C920-class webcams need ~5 frames for auto-exposure to settle.
@@ -61,16 +61,23 @@ class OpenCvCamera(WebcamCamera):
 
     def record(self) -> list[Path]:
         target_count = self.config.planned_frame_count()
+        deduper = _maybe_deduper(self.config)
         frames: list[Path] = []
+        captured = 0
         with self._managed_capture() as cap:
             self._warmup(cap)
-            for idx in range(target_count):
-                frame = self._read_next(cap)
-                if frame is None:
+            for _ in range(target_count):
+                bgr = self._read_next(cap)
+                if bgr is None:
                     continue
-                frames.append(self._save_frame(frame, idx))
+                captured += 1
+                image = self._bgr_to_pil(bgr)
+                if deduper is not None and not deduper.should_keep(image):
+                    continue
+                frames.append(self._save_image(image, len(frames)))
         if not frames:
             raise CaptureError("Webcam produced no frames during recording.")
+        self.stats = _deduper_stats(deduper, captured, len(frames))
         return frames
 
     @contextmanager
@@ -140,9 +147,16 @@ class OpenCvCamera(WebcamCamera):
                 return None
 
     def _save_frame(self, bgr_frame, idx: int) -> Path:
+        # Kept for snapshot(); record() goes via _bgr_to_pil + _save_image
+        # so the deduper can run between the two steps.
+        return self._save_image(self._bgr_to_pil(bgr_frame), idx)
+
+    def _bgr_to_pil(self, bgr_frame) -> Image.Image:
         cv2 = _require_cv2()
         rgb = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(rgb)
+        return Image.fromarray(rgb)
+
+    def _save_image(self, image: Image.Image, idx: int) -> Path:
         image = _maybe_resize(image, self.config.scale_width)
         path = self.session.frames_dir / f"frame_{idx:04d}.png"
         image.save(path, "PNG", optimize=True)

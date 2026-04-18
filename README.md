@@ -89,6 +89,9 @@ python -m claude_vision screenshot --region interactive
 
 # Capture only a region: explicit pixel coords (X,Y,W,H)
 python -m claude_vision capture --duration 3 --region 100,200,800,600
+
+# Keep every frame even if nothing moves (default drops near-duplicates)
+python -m claude_vision capture --duration 5 --fps 2 --no-dedupe
 ```
 
 ### Webcam
@@ -128,15 +131,17 @@ python -c "import cv2; [print(i, cv2.VideoCapture(i).isOpened()) for i in range(
 
 ## Parameters
 
-| Option          | Default | Meaning                                             |
-|-----------------|---------|-----------------------------------------------------|
-| `--duration`    | —       | Seconds to capture (required for video; max 120)    |
-| `--fps`         | 1.0     | Frames per second                                   |
-| `--max-frames`  | 24      | Hard cap on emitted frames                          |
-| `--scale-width` | 1568    | Target width in pixels; `0` disables resize         |
-| `--monitor`     | 0       | Monitor index for screen commands (0 = primary)     |
-| `--device`      | 0       | Webcam device index for webcam commands             |
-| `--region`      | (full)  | `interactive` or `X,Y,W,H`; screen commands only    |
+| Option                | Default | Meaning                                             |
+|-----------------------|---------|-----------------------------------------------------|
+| `--duration`          | —       | Seconds to capture (required for video; max 120)    |
+| `--fps`               | 1.0     | Frames per second                                   |
+| `--max-frames`        | 24      | Hard cap on emitted frames                          |
+| `--scale-width`       | 1568    | Target width in pixels; `0` disables resize         |
+| `--monitor`           | 0       | Monitor index for screen commands (0 = primary)     |
+| `--device`            | 0       | Webcam device index for webcam commands             |
+| `--region`            | (full)  | `interactive` or `X,Y,W,H`; screen commands only    |
+| `--no-dedupe`         | off     | Keep every frame (video commands); default drops near-identical frames |
+| `--dedupe-threshold`  | 0.01    | Mean pixel diff in [0,1] to count as "changed"      |
 
 ## Layout
 
@@ -155,7 +160,8 @@ claude-vision/
 ├── src/claude_vision/
 │   ├── config.py, session.py, errors.py
 │   ├── platform_detect.py              # X11 / macOS / Windows / GNOME Wayland
-│   ├── region.py                       # Region + interactive tkinter picker
+│   ├── region.py                       # Region + tkinter / pygame / GNOME pickers
+│   ├── dedupe.py                       # drop near-identical frames during video capture
 │   ├── cleaner.py, cli.py, __main__.py
 │   ├── recorders/
 │   │   ├── base.py                     # ABC: capture() + screenshot()
@@ -164,7 +170,7 @@ claude-vision/
 │   └── cameras/
 │       ├── base.py                     # ABC: snapshot() + record()
 │       └── opencv_camera.py            # OpenCV (webcam, cross-platform)
-├── tests/                              # 55 stdlib-only tests
+├── tests/                              # 61 stdlib-only tests
 ├── pyproject.toml
 └── README.md
 ```

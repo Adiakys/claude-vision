@@ -8,9 +8,10 @@ from pathlib import Path
 
 from PIL import Image
 
+from ..dedupe import FrameDeduper
 from ..errors import CaptureError, PlatformUnsupportedError
 from .base import ScreenRecorder
-from .mss_recorder import _maybe_resize
+from .mss_recorder import _deduper_stats, _maybe_deduper, _maybe_resize
 
 DBUS_DEST = "org.gnome.Shell.Screencast"
 DBUS_PATH = "/org/gnome/Shell/Screencast"
@@ -42,8 +43,9 @@ class GnomeWaylandRecorder(ScreenRecorder):
                 "prompt — accept it and retry."
             )
 
-        frames = self._extract_frames(imageio, webm)
+        frames, stats = self._extract_frames(imageio, webm)
         webm.unlink(missing_ok=True)
+        self.stats = stats
         return frames
 
     def screenshot(self) -> Path:
@@ -111,26 +113,31 @@ class GnomeWaylandRecorder(ScreenRecorder):
             )
         return result.stdout
 
-    def _extract_frames(self, imageio, webm: Path) -> list[Path]:
+    def _extract_frames(self, imageio, webm: Path) -> tuple[list[Path], dict]:
         max_frames = self.config.max_frames
         scale_width = self.config.scale_width
         region = self.config.region
+        deduper = _maybe_deduper(self.config)
         frames: list[Path] = []
-        for idx, array in enumerate(imageio.imiter(webm, plugin="pyav")):
-            if idx >= max_frames:
+        decoded = 0
+        for array in imageio.imiter(webm, plugin="pyav"):
+            if len(frames) >= max_frames:
                 break
+            decoded += 1
             image = Image.fromarray(array)
             # GNOME Screencast D-Bus has no region option, so we crop
             # post-decode. mss path uses native region; stays symmetric.
             if region is not None:
                 image = image.crop(region.as_pil_bbox())
+            if deduper is not None and not deduper.should_keep(image):
+                continue
             image = _maybe_resize(image, scale_width)
-            path = self.session.frames_dir / f"frame_{idx:04d}.png"
+            path = self.session.frames_dir / f"frame_{len(frames):04d}.png"
             image.save(path, "PNG", optimize=True)
             frames.append(path)
         if not frames:
             raise CaptureError("No frames decoded from GNOME screencast output.")
-        return frames
+        return frames, _deduper_stats(deduper, decoded, len(frames))
 
 
 def _require_imageio():

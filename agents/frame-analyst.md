@@ -94,9 +94,15 @@ Append flags when relevant:
 - `--region X,Y,W,H` — explicit region (screen only)
 - `--monitor <N>` — non-primary monitor (screen only)
 - `--device <N>` — non-default webcam (webcam only)
+- `--no-dedupe` — keep every frame even if near-identical (default is to
+  drop duplicates; **disable only for timelapses, stop-motion, or when the
+  user explicitly wants a fixed frame count regardless of motion**)
 
 Parse the JSON output to obtain `session_id` and either `frame` (snapshot)
-or `frames[]` (video).
+or `frames[]` (video). For video, the JSON also includes a `dedupe` block
+with `kept`/`skipped` counts — useful context when explaining why a 10-second
+clip produced only 3 frames ("nothing moved on screen for most of the
+recording").
 
 Errors to surface verbatim and stop:
 
