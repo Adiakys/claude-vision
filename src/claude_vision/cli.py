@@ -17,6 +17,7 @@ from .platform_detect import detect, preflight
 from .recorders import select_recorder
 from .region import Region, pick_interactive
 from .session import Session
+from .watch import WatchController
 
 REGION_INTERACTIVE_KEYWORD = "interactive"
 
@@ -97,6 +98,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     wcap.set_defaults(handler=_cmd_webcam_capture)
 
+    _add_watch_subparsers(sub)
+
     clean_cmd = sub.add_parser("clean", help="Delete a single session")
     clean_cmd.add_argument("--session", required=True)
     clean_cmd.set_defaults(handler=_cmd_clean)
@@ -106,6 +109,49 @@ def _build_parser() -> argparse.ArgumentParser:
     gc.set_defaults(handler=_cmd_gc)
 
     return parser
+
+
+def _add_watch_subparsers(sub) -> None:
+    start = sub.add_parser("watch-start", help="Begin an open-ended background screen watch")
+    start.add_argument("--fps", type=float, default=0.5)
+    start.add_argument(
+        "--scale-width", type=int, default=1568,
+        help="Target width in pixels; 0 disables resize",
+    )
+    start.add_argument("--monitor", type=int, default=0)
+    start.add_argument(
+        "--region", type=str, default=None,
+        help="Capture only a region: 'interactive' or 'X,Y,W,H'",
+    )
+    start.add_argument(
+        "--no-dedupe", dest="dedupe", action="store_false", default=True,
+        help="Keep every frame even if near-identical",
+    )
+    start.add_argument("--dedupe-threshold", type=float, default=0.01)
+    start.set_defaults(handler=_cmd_watch_start)
+
+    stop = sub.add_parser("watch-stop", help="Stop the running watch")
+    stop.add_argument("--timeout-s", type=float, default=5.0)
+    stop.set_defaults(handler=_cmd_watch_stop)
+
+    status = sub.add_parser("watch-status", help="Report the running watch, if any")
+    status.set_defaults(handler=_cmd_watch_status)
+
+    query = sub.add_parser(
+        "watch-query",
+        help="Return recent frames from the active watch (optionally with a fresh grab)",
+    )
+    query.add_argument("--since-seconds", type=float, default=5.0,
+                       help="Return frames captured in the last N seconds; 0 = entire session")
+    query.add_argument("--no-fresh", dest="fresh", action="store_false", default=True,
+                       help="Skip the immediate fresh-grab")
+    query.add_argument("--only-unseen", action="store_true", default=False,
+                       help="Exclude frames already marked as analyzed")
+    query.set_defaults(handler=_cmd_watch_query)
+
+    mark = sub.add_parser("watch-mark-seen", help="Mark frames as already analyzed")
+    mark.add_argument("paths", nargs="+", help="Frame paths to record in the watermark")
+    mark.set_defaults(handler=_cmd_watch_mark_seen)
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
@@ -235,6 +281,67 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
         "source": "webcam",
         "dedupe": _dedupe_summary(config, camera),
     })
+    return 0
+
+
+def _cmd_watch_start(args: argparse.Namespace) -> int:
+    platform = detect()
+    preflight(platform)
+    config = CaptureConfig(
+        duration_s=1.0,  # unused in watch mode; satisfies the dataclass default
+        fps=args.fps,
+        scale_width=args.scale_width,
+        monitor_index=args.monitor,
+        region=_resolve_region(args.region),
+        dedupe=args.dedupe,
+        dedupe_threshold=args.dedupe_threshold,
+    )
+    result = WatchController.start(config)
+    _emit({
+        "session_id": result.marker.session_id,
+        "session_path": str(result.marker.session_path),
+        "pid": result.marker.pid,
+        "fps": result.marker.fps,
+        "started_at": result.marker.started_at,
+        "active": True,
+    })
+    return 0
+
+
+def _cmd_watch_stop(args: argparse.Namespace) -> int:
+    payload = WatchController.stop(timeout_s=args.timeout_s)
+    _emit(payload)
+    return 0
+
+
+def _cmd_watch_status(_args: argparse.Namespace) -> int:
+    _emit(WatchController.status())
+    return 0
+
+
+def _cmd_watch_query(args: argparse.Namespace) -> int:
+    if args.fresh:
+        WatchController.fresh_grab()
+    frames = WatchController.frames_since(
+        seconds=args.since_seconds,
+        only_unseen=args.only_unseen,
+    )
+    status = WatchController.status()
+    _emit({
+        "session_id": status.get("session_id"),
+        "session_path": status.get("session_path"),
+        "frames": [str(p) for p in frames],
+        "count": len(frames),
+        "window_s": args.since_seconds,
+        "fresh": args.fresh,
+        "only_unseen": args.only_unseen,
+    })
+    return 0
+
+
+def _cmd_watch_mark_seen(args: argparse.Namespace) -> int:
+    WatchController.mark_seen(args.paths)
+    _emit({"marked": len(args.paths), "paths": args.paths})
     return 0
 
 

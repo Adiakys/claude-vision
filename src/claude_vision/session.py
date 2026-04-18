@@ -71,6 +71,24 @@ class Session:
     def list_frames(self) -> list[Path]:
         return sorted(self.frames_dir.glob("frame_*.png"))
 
+    def frames_seen(self) -> set[str]:
+        """Paths (as strings) that a subagent has already analyzed in this
+        session. Used by the watch mode to avoid re-reading old frames on
+        each live query."""
+        data = json.loads(self.marker.read_text())
+        return set(data.get("frames_seen", []))
+
+    def mark_frames_seen(self, paths) -> None:
+        """Append paths to the read-watermark. Idempotent; atomic via rename."""
+        data = json.loads(self.marker.read_text())
+        seen = set(data.get("frames_seen", []))
+        seen.update(str(p) for p in paths)
+        data["frames_seen"] = sorted(seen)
+        data["updated_at"] = _now_iso()
+        tmp = self.marker.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2))
+        tmp.replace(self.marker)
+
     def _write_marker(self, **payload: object) -> None:
         payload["id"] = self.id
         self.marker.write_text(json.dumps(payload, indent=2, default=str))

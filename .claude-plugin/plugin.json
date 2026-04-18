@@ -1,6 +1,6 @@
 {
   "name": "claude-vision",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Lets Claude Code see — screen captures and webcam frames analyzed by a dedicated subagent, returning a compact textual report.",
   "author": {
     "name": "Adiakys",

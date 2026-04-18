@@ -1,6 +1,6 @@
 ---
 name: screen-vision
-description: Use when Claude needs visual information - either from the user's SCREEN (UI debugging, verifying rendered web pages or dev servers, checking app rendering, layout issues, "what's on my screen?", "guarda la pagina", "cosa vedi sullo schermo?") OR from the LAPTOP WEBCAM (seeing the user, physical objects held up to the camera, the room: "puoi vedermi?", "guarda la mia faccia", "come mi vedi?", "cosa ho in mano?", "look at me", "describe what I'm holding"). Dispatches the frame-analyst subagent, which picks source (screen vs webcam) and mode (single frame vs short video), captures, analyzes, and returns a compact textual report — the main-agent context stays clean.
+description: Use when Claude needs visual information - either from the user's SCREEN (UI debugging, verifying rendered web pages or dev servers, checking app rendering, layout issues, "what's on my screen?", "guarda la pagina", "cosa vedi sullo schermo?") OR a SPECIFIC REGION of the screen via interactive rectangle selection ("guarda il bottone login", "check the settings menu") OR from the LAPTOP WEBCAM (seeing the user, physical objects held up to the camera, the room: "puoi vedermi?", "cosa ho in mano?") OR continuously WATCH the screen in the background while the user works ("guarda cosa faccio", "tienimi d'occhio", "watch what I do") with live query support during the watch ("cosa ho appena fatto?") and an explicit summary on request ("riepilogami cosa è successo"). Dispatches the frame-analyst subagent, which picks source, region, mode (snapshot vs video vs background watch), captures or reads from the ongoing watch, analyzes, and returns a compact textual report — the main-agent context stays clean.
 allowed-tools: Task
 ---
 
@@ -93,8 +93,34 @@ defaults to `snapshot`.
 The subagent returns a compact text report. Summarize it for the user in 2–4
 lines. Do not re-quote frame paths or JSON.
 
+## Watch mode (continuous background vision)
+
+When the user asks you to **watch** the screen open-endedly ("guarda cosa
+faccio", "tienimi d'occhio mentre provo questa cosa", "watch me for a few
+minutes"), the flow is:
+
+1. Dispatch `frame-analyst` with `Mode: watch-start` and the usual hints
+   (fps, region, scale). The subagent starts a background daemon and
+   returns.
+2. Acknowledge briefly: "Sto guardando. Chiedimi quello che ti serve."
+3. Any visual question the user asks while the watch is running → dispatch
+   `frame-analyst` normally. The subagent detects the active watch and
+   reads from the live session rather than capturing fresh.
+4. When the user says "basta" / "stop" / "puoi fermarti" → dispatch
+   `frame-analyst` with `Mode: watch-stop`. **Do NOT automatically
+   summarize.** The subagent just closes the session.
+5. Only if the user then explicitly asks for a summary ("riepiloga",
+   "cosa è successo in totale") → dispatch `frame-analyst` with
+   `Mode: watch-summary` to produce the recap.
+
+Default watch fps is `0.5` (one frame every 2 seconds) with dedupe on.
+Adjust via hints if the user is doing something fast-paced.
+
 ## Notes
 
 - The subagent handles capture, analysis, and cleanup on its own.
 - If the subagent reports "Wayland non-GNOME" or "install extra [wayland]",
   relay the actionable hint to the user and stop.
+- A forgotten watch will auto-clean itself after the next Claude turn if
+  older than 2 hours (the existing `Stop` hook GC), but it's good hygiene
+  to tell the user when a watch is still active.

@@ -107,6 +107,34 @@ python -m claude_vision webcam-capture --duration 3 --fps 2 --scale-width 1568
 python -m claude_vision webcam-snapshot --device 1
 ```
 
+### Continuous watch (background vision with live queries)
+
+```bash
+# Start an open-ended background watch (fps 0.5 = one frame every 2 sec)
+python -m claude_vision watch-start --fps 0.5
+
+# Check it's running
+python -m claude_vision watch-status
+
+# Mid-watch: get the last 5s of frames + one fresh frame right now
+python -m claude_vision watch-query
+
+# Mid-watch: widen the window to the last minute, exclude frames you've
+# already looked at
+python -m claude_vision watch-query --since-seconds 60 --only-unseen
+
+# Tell the watch "I've analyzed these frames — don't return them again"
+python -m claude_vision watch-mark-seen /tmp/.../frame_XXX.png
+
+# Stop the watch (does NOT produce a summary)
+python -m claude_vision watch-stop
+```
+
+In the Claude Code skill, the subagent handles all of this automatically:
+`"guarda cosa faccio"` starts a watch, subsequent questions are answered
+from the live session, `"basta"` stops it, and `"riepilogami"` triggers
+the summary.
+
 ### Housekeeping
 
 ```bash
@@ -162,6 +190,7 @@ claude-vision/
 │   ├── platform_detect.py              # X11 / macOS / Windows / GNOME Wayland
 │   ├── region.py                       # Region + tkinter / pygame / GNOME pickers
 │   ├── dedupe.py                       # drop near-identical frames during video capture
+│   ├── watch.py                        # background daemon + live query controller
 │   ├── cleaner.py, cli.py, __main__.py
 │   ├── recorders/
 │   │   ├── base.py                     # ABC: capture() + screenshot()
@@ -170,7 +199,7 @@ claude-vision/
 │   └── cameras/
 │       ├── base.py                     # ABC: snapshot() + record()
 │       └── opencv_camera.py            # OpenCV (webcam, cross-platform)
-├── tests/                              # 61 stdlib-only tests
+├── tests/                              # 77 stdlib-only tests
 ├── pyproject.toml
 └── README.md
 ```
