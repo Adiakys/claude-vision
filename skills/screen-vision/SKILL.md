@@ -1,6 +1,6 @@
 ---
 name: screen-vision
-description: Use when Claude needs visual information - either from the user's SCREEN (UI debugging, verifying rendered web pages or dev servers, checking app rendering, layout issues, "what's on my screen?", "guarda la pagina", "cosa vedi sullo schermo?") OR a SPECIFIC REGION of the screen via interactive rectangle selection ("guarda il bottone login", "check the settings menu") OR from the LAPTOP WEBCAM (seeing the user, physical objects held up to the camera, the room: "puoi vedermi?", "cosa ho in mano?") OR continuously WATCH the screen in the background while the user works ("guarda cosa faccio", "tienimi d'occhio", "watch what I do") with live query support during the watch ("cosa ho appena fatto?") and an explicit summary on request ("riepilogami cosa è successo"). Dispatches the frame-analyst subagent, which picks source, region, mode (snapshot vs video vs background watch), captures or reads from the ongoing watch, analyzes, and returns a compact textual report — the main-agent context stays clean.
+description: Activate whenever Claude needs VISUAL INFORMATION to make progress — in ANY language. Trigger on INTENT, not keywords. Use this skill when (a) the user asks anything that requires inspecting the screen, a screen region, the webcam, or their physical environment, OR (b) Claude itself realizes mid-task that it cannot solve the problem without actually seeing what is happening (e.g., debugging a CSS animation, verifying a rendered UI, diagnosing why an element looks wrong, confirming the user's physical context). In case (b), proactively propose the skill to the user rather than guessing. Italian and English are first-class — examples EN: "what's on my screen?", "this button looks off", "can you see me?", "watch what I do"; examples IT: "cosa c'è sullo schermo?", "guarda la pagina", "puoi vedermi?", "tienimi d'occhio". For any other language, activate on the semantically equivalent intent regardless of exact phrasing. The skill dispatches the frame-analyst subagent which picks source (screen / screen region / webcam), mode (single snapshot / short video / continuous background watch with live queries), captures or reads from the ongoing watch, analyzes the frames, and returns a compact textual report — the main-agent context stays clean.
 allowed-tools: Task
 ---
 
@@ -10,6 +10,21 @@ You need visual information about the user's screen or their physical
 surroundings (webcam). **Delegate the entire pipeline to the `frame-analyst`
 subagent** — do not call the CLI yourself. This keeps the main conversation
 context free of frame paths and tool JSON.
+
+### When to activate (intent, not keywords)
+
+- **Reactive**: the user asks anything that can only be answered by seeing
+  (regardless of the language they're writing in).
+- **Proactive**: you're in the middle of solving a problem and realize the
+  next useful step requires seeing the rendered behavior — e.g. a CSS
+  animation that "doesn't start", a dialog that "looks wrong", a piece of
+  UI the user is describing but that you can't verify from the code alone.
+  In that case, briefly propose the capture ("per vedere come si comporta
+  l'animazione apro una breve registrazione, ok?") and dispatch the
+  subagent rather than guessing from code.
+
+Italian and English intents must be recognized perfectly; for any other
+language, rely on semantic equivalence.
 
 ## Step 1 — Form the visual question
 
