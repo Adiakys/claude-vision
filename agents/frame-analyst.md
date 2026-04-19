@@ -44,46 +44,52 @@ screen.
 - **`video`** — multiple frames. Only when motion / interaction / transition /
   temporal info is actually needed.
 
-## 2.5. Choose region (screen only)
+## 2.5. Choose region (screen only) — propose, don't force
 
-Strong preference: **choose `interactive` whenever the user is asking
-about a single concrete thing on screen**. Full captures cost ~10× more
-tokens and let you drown useful detail in noise.
+When the question is clearly about **one named element** on screen (a
+specific button, a dialog, a panel, one piece of text), **propose** the
+interactive region picker before dispatching — don't silently default
+to full-screen. A good proposal looks like:
 
-- **`interactive`** (strongly preferred for targeted questions) — opens
-  the region picker; the user drags a rectangle. Tell them *before*
-  dispatching that a picker will appear.
-  Pick it when the question is about:
-  - a single UI element: "il titolo del terminale", "il bottone login",
-    "l'icona nella taskbar", "la tab attiva"
-  - one area of the screen: "il menu settings", "la finestra di errore",
-    "il pannello laterale", "l'overlay in alto a destra"
-  - specific text / content: "cosa c'è scritto in quel popup",
-    "l'errore mostrato", "il valore in quel campo"
-- **`full`** — the whole monitor. Only when the question is genuinely
-  broad: "cosa c'è sullo schermo", "descrivi tutto ciò che vedi",
-  "controlla tutta la pagina", "fai una panoramica del desktop".
-- **`X,Y,W,H`** — explicit coordinates. Only when the main agent passes
-  them (rare; usually to repeat a previous pick).
+  "Per vedere meglio <element>, ti conviene selezionare l'area col
+   picker — aprilo? (altrimenti catturo tutto lo schermo)"
 
-When in doubt between `full` and `interactive`, **choose `interactive`**.
+If the user says yes, use `--region interactive`. If they say no, or
+don't answer, use full. If the question is clearly broad ("cosa c'è
+sullo schermo", "descrivi la pagina") use full without asking.
+
+`--region X,Y,W,H` is reserved for programmatic use when the main agent
+already has coordinates.
 
 For webcam captures, ignore this step entirely.
 
 ## 3. Normalize parameters
 
-Apply this order of precedence:
+### Adaptive resolution — pick `--scale-width` from the question's verb
 
-1. Use numeric hints from the main agent if provided.
-2. Map qualitative resolution hints to `--scale-width`:
-   - `full` → `0` (native resolution, largest frames)
-   - `high` → `2400`
-   - `medium` → `1568` (default, sweet spot)
-   - `low` → `768`
-3. Video-mode defaults: `duration=5`, `fps=1`, `scale_width=1568`.
-4. Snapshot-mode defaults: `scale_width=1568`.
-5. Webcam: use `--device N` only if main agent passed a non-zero index.
-6. Clamp to validator limits: duration ≤ 120s, fps > 0, max_frames ≤ 24.
+The CLI default is now `1024` (long-edge → ~1050 tokens per frame).
+Override **only when the task truly needs more or less**:
+
+| Kind of question | Example verbs                         | `--scale-width` |
+|------------------|---------------------------------------|-----------------|
+| Overview / scene | descrivi, guarda, cosa vedi, che c'è  | `768` or omit   |
+| Normal UI work   | controlla, verifica, funziona, ok?    | `1024` (default)|
+| Reading text     | leggi, scrivi, trascrivi, che dice    | `1568`          |
+| Pixel detail     | misura, confronta, pixel, preciso     | `2400`          |
+
+On Opus models the ceiling is 2576; `2400` is the practical maximum.
+Going higher is wasted tokens (the model resizes internally anyway).
+
+Other defaults:
+
+1. Numeric hints from the main agent override everything.
+2. Video-mode defaults: `duration=5`, `fps=1`.
+3. Snapshot-mode defaults: no duration/fps needed.
+4. Webcam: pass `--device N` only if main agent specified a non-zero
+   index. **Do not pass `--no-crop`** unless the user explicitly wants
+   the whole webcam view — the default center-crop (~33% area) discards
+   background and saves ~70% tokens.
+5. Clamp to validator limits: duration ≤ 120s, fps > 0, max_frames ≤ 24.
 
 ### Fast-event override (animations, transitions, graphical bugs)
 
@@ -171,10 +177,43 @@ Errors to surface verbatim and stop:
 - macOS "Screen Recording" permission — grant the terminal access in
   System Settings > Privacy & Security > Screen Recording
 
+## 4.5 Smart frame selection (for multi-frame captures)
+
+After a `capture`, `webcam-capture`, or `watch-query`, you have a list of
+N frame paths. Before reading them at full resolution, apply this rule to
+stay token-efficient:
+
+- **N ≤ 4**: read all frames with `Read` at full resolution. Skip step 4.5.
+- **N > 4**: do a thumbnail pre-scan:
+  1. Generate thumbnails with a second-pass dedupe:
+     ```
+     $HOME/.local/state/claude-vision/bin/claude-vision thumbs \
+         --session <session_id>
+     ```
+     Default size 256px long-edge (~49 tokens each), default
+     `--dedupe-threshold 0.02` collapses near-identical frames into a
+     single representative.
+  2. Read every returned thumbnail with `Read`. These are the only
+     candidates worth considering.
+  3. Pick **2–4 frames** that most likely answer the user's question
+     (scene transitions, event frames, frames containing the targeted
+     element — not just positional picks like "first/middle/last").
+  4. Read those 2–4 **full-size** frames with `Read`.
+  5. If the answer is still unclear, load 1–2 more full frames on demand
+     from the remaining thumbnails. Don't bulk-load everything.
+
+**Why this matters**: a 30-frame watch session naively read is ~30k
+tokens. Thumb pre-scan with dedup produces ~6 thumbs + 3 full frames =
+~3.4k tokens (-89%), with strictly better selection than reading frames
+by index.
+
+Skip the thumb pre-scan entirely if the user asks for an exhaustive
+pass ("analizza tutti i frame uno per uno", "descrivi frame per frame").
+
 ## 5. Analyze
 
-Read each frame path using the `Read` tool. Frames are named
-`frame_0000.png`, `frame_0001.png`, … in temporal order.
+Read your selected frame paths using the `Read` tool. Frames are in
+temporal order by filename.
 
 Then answer the main agent's visual question:
 

@@ -17,6 +17,11 @@ from .platform_detect import detect, preflight
 from .recorders import select_recorder
 from .region import Region, pick_interactive
 from .session import Session
+from .thumbs import (
+    DEFAULT_THUMB_DEDUPE_THRESHOLD,
+    DEFAULT_THUMB_SIZE,
+    generate_thumbnails,
+)
 from .watch import WatchController
 
 REGION_INTERACTIVE_KEYWORD = "interactive"
@@ -77,6 +82,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Target width in pixels; 0 disables resize",
     )
     wshot.add_argument("--device", type=int, default=0, help="Webcam device index")
+    wshot.add_argument(
+        "--no-crop", dest="crop_center", action="store_false", default=True,
+        help="Skip the default center-crop (keep full webcam frame)",
+    )
     wshot.set_defaults(handler=_cmd_webcam_snapshot)
 
     wcap = sub.add_parser("webcam-capture", help="Record a short video from the webcam")
@@ -96,9 +105,28 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dedupe-threshold", type=float, default=0.01,
         help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
     )
+    wcap.add_argument(
+        "--no-crop", dest="crop_center", action="store_false", default=True,
+        help="Skip the default center-crop (keep full webcam frame)",
+    )
     wcap.set_defaults(handler=_cmd_webcam_capture)
 
     _add_watch_subparsers(sub)
+
+    thumbs = sub.add_parser(
+        "thumbs",
+        help="Generate resized PNG thumbnails for a session's frames",
+    )
+    thumbs.add_argument("--session", required=True,
+                        help="Session id or absolute session path")
+    thumbs.add_argument("--size", type=int, default=DEFAULT_THUMB_SIZE,
+                        help="Long-edge size in pixels (default: 256)")
+    thumbs.add_argument(
+        "--dedupe-threshold", type=float,
+        default=DEFAULT_THUMB_DEDUPE_THRESHOLD,
+        help="Second-pass dedupe threshold in [0, 1]; 0 disables (default: 0.02)",
+    )
+    thumbs.set_defaults(handler=_cmd_thumbs)
 
     clean_cmd = sub.add_parser("clean", help="Delete a single session")
     clean_cmd.add_argument("--session", required=True)
@@ -229,6 +257,7 @@ def _cmd_webcam_snapshot(args: argparse.Namespace) -> int:
     config = CaptureConfig(
         scale_width=args.scale_width,
         device_index=args.device,
+        crop_center=args.crop_center,
     )
     session = Session.create(config)
     camera = select_camera(session, config)
@@ -259,6 +288,7 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
         device_index=args.device,
         dedupe=args.dedupe,
         dedupe_threshold=args.dedupe_threshold,
+        crop_center=args.crop_center,
     )
     session = Session.create(config)
     camera = select_camera(session, config)
@@ -342,6 +372,33 @@ def _cmd_watch_query(args: argparse.Namespace) -> int:
 def _cmd_watch_mark_seen(args: argparse.Namespace) -> int:
     WatchController.mark_seen(args.paths)
     _emit({"marked": len(args.paths), "paths": args.paths})
+    return 0
+
+
+def _cmd_thumbs(args: argparse.Namespace) -> int:
+    session = Session.load(_resolve_session(args.session))
+    entries = generate_thumbnails(
+        session,
+        size=args.size,
+        dedupe_threshold=args.dedupe_threshold,
+    )
+    source_frames = session.list_frames()
+    _emit({
+        "session_id": session.id,
+        "session_path": str(session.root),
+        "source_count": len(source_frames),
+        "kept_count": len(entries),
+        "size": args.size,
+        "dedupe_threshold": args.dedupe_threshold,
+        "thumbs": [
+            {
+                "frame": str(e.frame_path),
+                "thumb": str(e.thumb_path),
+                "index": e.source_index,
+            }
+            for e in entries
+        ],
+    })
     return 0
 
 

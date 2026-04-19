@@ -28,12 +28,13 @@ class CaptureConfig:
     duration_s: float = 1.0
     fps: float = 1.0
     max_frames: int = MAX_FRAMES_CAP
-    scale_width: int = 1568
+    scale_width: int = 1024
     monitor_index: int = 0
     device_index: int = 0
     region: Region | None = None
     dedupe: bool = True
     dedupe_threshold: float = 0.01
+    crop_center: bool = False
     session_root: Path = field(default_factory=_default_session_root)
 
     def __post_init__(self) -> None:

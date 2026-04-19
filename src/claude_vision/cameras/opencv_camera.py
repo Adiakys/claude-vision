@@ -34,6 +34,19 @@ DARWIN_READ_TIMEOUT_S = 2.0
 BLACK_FRAME_THRESHOLD = 2.0
 
 
+def _crop_center(image: Image.Image, area_fraction: float = 1 / 3) -> Image.Image:
+    """Crop to the central region whose area is ``area_fraction`` of the total,
+    preserving aspect ratio. Default 1/3 keeps the subject (face / held object)
+    and drops background noise — typical for webcam captures."""
+    side_fraction = area_fraction ** 0.5
+    w, h = image.size
+    new_w = max(1, int(w * side_fraction))
+    new_h = max(1, int(h * side_fraction))
+    left = (w - new_w) // 2
+    top = (h - new_h) // 2
+    return image.crop((left, top, left + new_w, top + new_h))
+
+
 def _require_cv2():
     try:
         import cv2  # noqa: F401
@@ -154,7 +167,10 @@ class OpenCvCamera(WebcamCamera):
     def _bgr_to_pil(self, bgr_frame) -> Image.Image:
         cv2 = _require_cv2()
         rgb = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
-        return Image.fromarray(rgb)
+        image = Image.fromarray(rgb)
+        if self.config.crop_center:
+            image = _crop_center(image)
+        return image
 
     def _save_image(self, image: Image.Image, idx: int) -> Path:
         image = _maybe_resize(image, self.config.scale_width)

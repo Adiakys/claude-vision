@@ -7,8 +7,9 @@ from claude_vision.errors import InvalidConfigError
 def test_defaults_are_valid():
     cfg = CaptureConfig(duration_s=5)
     assert cfg.fps == 1.0
-    assert cfg.scale_width == 1568
+    assert cfg.scale_width == 1024
     assert cfg.monitor_index == 0
+    assert cfg.crop_center is False
 
 
 def test_effective_fps_caps_to_max_frames():
