@@ -53,7 +53,13 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "${STAGING}"' EXIT
 
 # 1. Populate staging with EVERYTHING from base
-cp -r "${BASE}/." "${STAGING}/"
+#    Skip generated caches so sync stays deterministic across test runs.
+rsync -a \
+    --exclude='__pycache__' \
+    --exclude='.pytest_cache' \
+    --exclude='*.pyc' \
+    --exclude='.egg-info' \
+    "${BASE}/" "${STAGING}/"
 
 # 2. Overlay the full-only files from the EXISTING full/, so they survive
 if [ -d "${FULL}" ]; then
@@ -68,12 +74,17 @@ if [ -d "${FULL}" ]; then
     done
 fi
 
-# 3. Compare staging with current full
+# 3. Compare staging with current full (ignoring transient cache files)
 if [ "${VERIFY}" = true ]; then
-    if ! diff -qr "${STAGING}" "${FULL}" >/dev/null 2>&1; then
+    DIFF_OUT="$(diff -qr \
+        --exclude='__pycache__' \
+        --exclude='.pytest_cache' \
+        --exclude='*.pyc' \
+        "${STAGING}" "${FULL}" 2>&1 || true)"
+    if [ -n "${DIFF_OUT}" ]; then
         echo "sync: plugins/full/ is out of sync with plugins/base/" >&2
         echo "      run ./scripts/sync.sh to regenerate" >&2
-        diff -qr "${STAGING}" "${FULL}" | head -20 >&2 || true
+        echo "${DIFF_OUT}" | head -20 >&2
         exit 1
     fi
     echo "sync: plugins/full/ is in sync with plugins/base/"
