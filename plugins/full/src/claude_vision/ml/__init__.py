@@ -12,7 +12,6 @@ Public API:
     resolve_device    — pick "cuda" | "mps" | "cpu" for the user's environment.
 """
 
-from .caption_store import CaptionEntry, append_caption, read_captions
 from .captioner import (
     DEFAULT_CAPTION_MODEL,
     SUPPORTED_CAPTION_MODELS,
@@ -22,9 +21,6 @@ from .captioner import (
 
 __all__ = [
     "SmolVLMCaptioner",
-    "CaptionEntry",
-    "append_caption",
-    "read_captions",
     "resolve_device",
     "DEFAULT_CAPTION_MODEL",
     "SUPPORTED_CAPTION_MODELS",

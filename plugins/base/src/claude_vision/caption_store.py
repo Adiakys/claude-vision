@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from ..session import Session
+from .session import Session
 
 CAPTIONS_FILENAME = "captions.jsonl"
 

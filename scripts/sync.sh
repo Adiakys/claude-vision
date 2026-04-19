@@ -35,6 +35,7 @@ FULL_ONLY=(
     "hooks/bootstrap.sh"                 # different EXTRAS string (includes ml)
     "pyproject.toml"                     # different name + ml extra
     "src/claude_vision/ml"               # ML module lives only in full
+    "tests/test_captioner.py"            # test of the ml-specific module
 )
 
 _is_full_only() {
