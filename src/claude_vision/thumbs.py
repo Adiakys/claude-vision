@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from PIL import Image
 
@@ -46,12 +47,18 @@ class ThumbEntry:
 def generate_thumbnails(
     session: Session,
     *,
+    frames: Sequence[Path] | None = None,
     size: int = DEFAULT_THUMB_SIZE,
     dedupe_threshold: float = DEFAULT_THUMB_DEDUPE_THRESHOLD,
     max_thumbs: int | None = None,
 ) -> list[ThumbEntry]:
     """Generate thumbnails for the frames of ``session`` that survive an
     optional second-pass dedupe and (optionally) a top-N cap.
+
+    ``frames`` scopes the operation to a specific subset (e.g. the paths
+    returned by ``watch-query`` for a narrow time window). When ``None``,
+    defaults to every frame in the session — the right choice for
+    one-shot captures or full-session summaries.
 
     ``size`` is the long-edge target in pixels; aspect ratio is preserved.
     ``dedupe_threshold`` is the mean-pixel-diff cutoff (in [0, 1]) for the
@@ -63,15 +70,16 @@ def generate_thumbnails(
     thumb_dir = session.root / THUMB_DIR_NAME
     thumb_dir.mkdir(exist_ok=True)
 
-    frames = session.list_frames()
-    survivors = _dedupe_with_scores(frames, dedupe_threshold)
+    source_frames = list(frames) if frames is not None else session.list_frames()
+    survivors = _dedupe_with_scores(source_frames, dedupe_threshold)
     if max_thumbs is not None and len(survivors) > max_thumbs:
         survivors = _cap_by_score(survivors, max_thumbs)
 
     entries: list[ThumbEntry] = []
     for source_idx, _score in survivors:
-        frame_path = frames[source_idx]
-        thumb_path = thumb_dir / f"thumb_{source_idx:04d}.png"
+        frame_path = source_frames[source_idx]
+        stem = frame_path.stem.removeprefix("frame_")
+        thumb_path = thumb_dir / f"thumb_{stem}.png"
         _write_thumb(frame_path, thumb_path, size)
         entries.append(ThumbEntry(
             frame_path=frame_path, thumb_path=thumb_path, source_index=source_idx,

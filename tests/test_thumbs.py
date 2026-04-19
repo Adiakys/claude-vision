@@ -117,3 +117,32 @@ def test_max_thumbs_none_returns_all_dedup_survivors(session):
         _write_frame(session, i, c)
     entries = generate_thumbnails(session, max_thumbs=None, dedupe_threshold=0.02)
     assert len(entries) == 3
+
+
+def test_frames_scopes_to_subset(session):
+    # 5 frames in session; only scope to the last 2
+    colors = ["white", "black", "red", "green", "blue"]
+    all_paths = [_write_frame(session, i, c) for i, c in enumerate(colors)]
+    subset = all_paths[3:]   # [green, blue]
+    entries = generate_thumbnails(session, frames=subset, dedupe_threshold=0)
+    assert len(entries) == 2
+    assert {e.frame_path for e in entries} == set(subset)
+
+
+def test_frames_none_falls_back_to_whole_session(session):
+    for i, c in enumerate(["red", "green", "blue"]):
+        _write_frame(session, i, c)
+    # frames=None → scans entire session, same as before
+    entries = generate_thumbnails(session, frames=None, dedupe_threshold=0)
+    assert len(entries) == 3
+
+
+def test_frames_with_dedupe_collapses_only_within_subset(session):
+    _write_frame(session, 0, "red")
+    _write_frame(session, 1, "red")      # identical
+    _write_frame(session, 2, "black")    # different
+    _write_frame(session, 3, "black")    # identical to #2
+    # Scope to indexes 2, 3 only — dedupe should collapse them to 1 inside that window
+    subset = sorted(session.frames_dir.glob("frame_*.png"))[2:]
+    entries = generate_thumbnails(session, frames=subset, dedupe_threshold=0.02)
+    assert len(entries) == 1

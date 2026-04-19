@@ -130,6 +130,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max", type=int, default=None, dest="max_thumbs",
         help="Cap output to the top-N most significant thumbs (by change magnitude)",
     )
+    thumbs.add_argument(
+        "--frames", nargs="+", default=None,
+        help="Scope to a specific list of frame paths (defaults to the whole session)",
+    )
     thumbs.set_defaults(handler=_cmd_thumbs)
 
     clean_cmd = sub.add_parser("clean", help="Delete a single session")
@@ -381,21 +385,24 @@ def _cmd_watch_mark_seen(args: argparse.Namespace) -> int:
 
 def _cmd_thumbs(args: argparse.Namespace) -> int:
     session = Session.load(_resolve_session(args.session))
+    scoped_frames = [Path(p) for p in args.frames] if args.frames else None
     entries = generate_thumbnails(
         session,
+        frames=scoped_frames,
         size=args.size,
         dedupe_threshold=args.dedupe_threshold,
         max_thumbs=args.max_thumbs,
     )
-    source_frames = session.list_frames()
+    source_count = len(scoped_frames) if scoped_frames is not None else len(session.list_frames())
     _emit({
         "session_id": session.id,
         "session_path": str(session.root),
-        "source_count": len(source_frames),
+        "source_count": source_count,
         "kept_count": len(entries),
         "size": args.size,
         "dedupe_threshold": args.dedupe_threshold,
         "max_thumbs": args.max_thumbs,
+        "scoped": scoped_frames is not None,
         "thumbs": [
             {
                 "frame": str(e.frame_path),

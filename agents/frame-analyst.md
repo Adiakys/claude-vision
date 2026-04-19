@@ -194,17 +194,29 @@ N frame paths. Apply **two rules** to stay token-efficient:
      Default size 256px long-edge (~49 tokens each), default
      `--dedupe-threshold 0.02` collapses near-identical frames.
 
-     For **long watch sessions** (> ~30 surviving thumbs), cap the
-     scan budget with `--max N`:
+     **In watch mode with a narrow query**, scope the scan to the
+     specific frames returned by `watch-query` via `--frames`:
+     ```
+     ... thumbs --session <session_id> --frames <path1> <path2> ...
+     ```
+     Without `--frames`, `thumbs` walks the ENTIRE session directory
+     (which on a 30-minute watch can be hundreds of frames far outside
+     the user's time window). The `--frames` flag keeps the scan
+     scoped to what you actually care about — critical for long-running
+     watches.
+
+     For **long overview requests** ("riepilogami la sessione",
+     many surviving thumbs), cap the scan budget with `--max N`:
      ```
      ... thumbs --session <session_id> --max 10
      ```
      `--max` keeps the **N thumbs with the highest change magnitudes**
      (ranked by ``ranking.rank_by_significance``) and preserves
      temporal order in the output. Use it for overview questions on
-     multi-hour sessions where a full thumb-scan would cost thousands
-     of tokens. For animation-bug or transition-detail queries do NOT
-     cap — you want every keyframe.
+     multi-hour sessions. For animation-bug or transition-detail
+     queries do NOT cap — you want every keyframe.
+
+     You can combine `--frames` and `--max`: first scope, then rank.
   2. Read every returned thumbnail with `Read`. These are the only
      candidates worth considering.
   3. Rank them by likely relevance to the user's question (scene
