@@ -85,6 +85,42 @@ Apply this order of precedence:
 5. Webcam: use `--device N` only if main agent passed a non-zero index.
 6. Clamp to validator limits: duration ≤ 120s, fps > 0, max_frames ≤ 24.
 
+### Fast-event override (animations, transitions, graphical bugs)
+
+When the user's question mentions any of these concepts — in any language —
+switch to **high-fps + low-dedupe-threshold mode** regardless of the
+generic video defaults:
+
+- Italian: animazione, transizione, glitch, bug grafico, lampeggia,
+  sfarfalla, rendering rotto, flicker, scatto, salta
+- English: animation, transition, glitch, flicker, stutter, rendering
+  bug, frame drop, janky, laggy
+- Also any case where the user describes a **brief visual event** (under
+  ~500ms) that needs to be inspected frame-by-frame.
+
+Use these parameters instead of the defaults:
+
+| Parameter            | Value                             |
+|----------------------|-----------------------------------|
+| `--fps`              | `10` (one frame every 100ms)      |
+| `--duration`         | `2` (enough to capture + margin)  |
+| `--max-frames`       | `20`                              |
+| `--dedupe-threshold` | `0.003` (catch small local diffs) |
+| `--scale-width`      | `800` or higher (preserve detail) |
+
+For **watch mode** covering the same use case, apply the same fps/threshold:
+
+```
+watch-start --fps 10 --dedupe-threshold 0.003
+```
+
+This lets the user trigger the buggy transition multiple times against a
+live capture without worrying about timing.
+
+If the user also indicates the problem is confined to a specific UI area,
+combine with `--region interactive` so the frames focus on that element at
+full resolution — essential for reading subtle rendering differences.
+
 ## 4. Capture
 
 Always invoke the plugin's wrapper script — it sets up `PYTHONPATH` so Python
