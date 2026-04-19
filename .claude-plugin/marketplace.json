@@ -7,9 +7,16 @@
   "plugins": [
     {
       "name": "claude-vision",
-      "source": "./",
-      "description": "Let Claude see your screen or webcam. Dispatches a subagent that captures, analyzes frames, and returns a compact report.",
-      "version": "0.6.0",
+      "source": "./plugins/base/",
+      "description": "Let Claude see your screen or webcam via snapshots, region captures, short videos, or a continuous background watch with live queries.",
+      "version": "0.7.0",
+      "category": "productivity"
+    },
+    {
+      "name": "claude-vision-full",
+      "source": "./plugins/full/",
+      "description": "claude-vision plus local image captioning: a small VLM (SmolVLM) runs continuously during watch mode, producing a text log Claude can read instead of raw frames — cuts token cost on long retrospective queries by ~50x.",
+      "version": "0.7.0",
       "category": "productivity"
     }
   ]

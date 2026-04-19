@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "claude-vision"
-version = "0.6.0"
-description = "Screen capture tool for Claude Code vision skill — cross-platform frame capture with pip-only dependencies"
+name = "claude-vision-full"
+version = "0.7.0"
+description = "claude-vision + local VLM captioning (SmolVLM) for token-efficient retrospective queries on long watch sessions."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -28,6 +28,13 @@ picker = [
     # without python3-tk). The bootstrap hook pulls this extra only when
     # tkinter is missing — on Fedora/Arch/macOS/Windows it stays unused.
     "pygame-ce>=2.5",
+]
+ml = [
+    # Local image captioning for watch mode. ~750 MB first-run total download
+    # (torch CPU wheel + transformers + SmolVLM-256M model).
+    "transformers>=4.40",
+    "torch>=2.1",
+    "accelerate>=0.27",
 ]
 dev = [
     "pytest>=7.0",

@@ -1,0 +1,22 @@
+{
+  "name": "claude-vision-full",
+  "version": "0.7.0",
+  "description": "claude-vision plus local image captioning via SmolVLM. The watch daemon captions frames in real time; Claude reads the text log for retrospective queries, cutting token cost ~50x vs reading raw frames. Includes all base features.",
+  "author": {
+    "name": "Adiakys",
+    "email": "andreaficarra05@gmail.com"
+  },
+  "homepage": "https://github.com/Adiakys/claude-vision",
+  "repository": "https://github.com/Adiakys/claude-vision",
+  "license": "MIT",
+  "keywords": [
+    "vision",
+    "screen-capture",
+    "webcam",
+    "screenshot",
+    "skill",
+    "local-ml",
+    "vlm",
+    "captioning"
+  ]
+}
