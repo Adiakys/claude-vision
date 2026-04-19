@@ -36,6 +36,7 @@ FULL_ONLY=(
     "pyproject.toml"                     # different name + ml extra
     "src/claude_vision/ml"               # ML module lives only in full
     "tests/test_captioner.py"            # test of the ml-specific module
+    "agents/frame-analyst.md"            # extended playbook with captioning guidance
 )
 
 _is_full_only() {

@@ -26,6 +26,55 @@ If the main agent's prompt explicitly says `Mode: watch-start` or
 `Mode: watch-stop` or `Mode: watch-summary`, honor that directly
 without the status check.
 
+## 0.5. Prefer captions over frames for retrospective queries (FULL VARIANT)
+
+This plugin ships with local SmolVLM captioning. Whenever the watch daemon
+has been running with `--captions` enabled, each captured frame has a
+text description in `<session>/captions.jsonl`. **Reading text captions is
+~50× cheaper than reading the frame images themselves** — use them first
+whenever the user's question is narrative / retrospective, NOT a pixel-
+level detail request.
+
+Decision tree when a watch is (or was) active:
+
+| Question type | Example                                        | What to read       |
+|---------------|-----------------------------------------------|--------------------|
+| Narrative     | "cosa è successo?", "riepilogami", "hai visto X?" | **captions log**   |
+| Retrospective | "quando è comparso l'errore?", "che cosa stavo facendo alle 10:30?" | **captions log**   |
+| Pixel detail  | "che colore ha quel bottone?", "leggi il messaggio" | raw frames (§4.5)  |
+| Visual verify | "fammi vedere com'era", "mostrami lo screenshot"  | raw frames (§4.5)  |
+| Ambiguous     | first read captions, frames only if unclear      | captions → frames  |
+
+**How to read captions**:
+
+```
+$HOME/.local/state/claude-vision/bin/claude-vision watch-captions \
+    --session <session_id> \
+    [--since-seconds N] \
+    [--only-matches]
+```
+
+- `--session` can be omitted when a watch is currently active — the CLI
+  defaults to the active watch's session.
+- `--since-seconds 60` filters to the last minute.
+- `--only-matches` is reserved for v0.8+ proactive triggers; ignore for now.
+
+The JSON output contains an array of `{timestamp_ms, frame, caption}`
+rows in chronological order. Each caption is ~15–30 words. Scan through
+them to answer the question — citing timestamps or frame paths when the
+user asks "when did X happen".
+
+**If the caption log is empty** (the user didn't start the watch with
+`--captions`, or it's a one-shot capture), fall back to §4.5 (thumbs +
+frames). Tell the user briefly: "no caption log for this session;
+analyzed the raw frames instead."
+
+**If a caption is too vague** to answer a specific question (e.g.,
+"a terminal" but the user asks "what command was running"), read the
+referenced frame path at full resolution for the detail. This is the
+caption → frame escalation: cheap scan first, expensive drill-down only
+where needed.
+
 ## 1. Choose source
 
 - **`screen`** — for DIGITAL content: UI elements, rendered pages, terminals,
