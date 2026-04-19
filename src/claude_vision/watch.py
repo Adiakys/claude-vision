@@ -35,6 +35,7 @@ from PIL import Image
 from .config import CaptureConfig
 from .dedupe import FrameDeduper
 from .errors import CaptureError
+from .notify import notify
 from .recorders.mss_recorder import _maybe_resize
 from .session import Session
 
@@ -238,6 +239,7 @@ class WatchController:
             fps=config.fps,
         )
         marker.save()
+        notify(f"⏺ Watch started (fps {config.fps})")
         return WatchStartResult(marker=marker, session=session)
 
     @staticmethod
@@ -253,6 +255,7 @@ class WatchController:
         WatchMarker.clear()
         session = Session.load(marker.session_path)
         frames = session.list_frames()
+        notify(f"⏹ Watch stopped ({len(frames)} frames)")
         return {
             "session_id": marker.session_id,
             "session_path": str(marker.session_path),

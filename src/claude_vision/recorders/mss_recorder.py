@@ -10,6 +10,7 @@ from PIL import Image
 
 from ..dedupe import FrameDeduper
 from ..errors import CaptureError
+from ..notify import notify
 from .base import ScreenRecorder
 
 
@@ -21,6 +22,7 @@ class MssRecorder(ScreenRecorder):
         deduper = _maybe_deduper(self.config)
         frames: list[Path] = []
 
+        notify(f"📷 Recording {self.config.duration_s:.0f}s of screen...")
         with mss.mss() as sct:
             monitor = self._select_monitor(sct)
             start = time.monotonic()
@@ -34,6 +36,7 @@ class MssRecorder(ScreenRecorder):
                     continue
                 frames.append(self._save_image(image, len(frames)))
         self.stats = _deduper_stats(deduper, planned, len(frames))
+        notify(f"✓ Screen capture done ({len(frames)} frames kept)")
         return frames
 
     def screenshot(self) -> Path:

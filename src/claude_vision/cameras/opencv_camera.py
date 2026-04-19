@@ -14,6 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 from ..errors import CaptureError, PlatformUnsupportedError, WebcamPermissionError
+from ..notify import notify
 from ..recorders.mss_recorder import _deduper_stats, _maybe_deduper, _maybe_resize
 from .base import WebcamCamera
 
@@ -77,6 +78,7 @@ class OpenCvCamera(WebcamCamera):
         deduper = _maybe_deduper(self.config)
         frames: list[Path] = []
         captured = 0
+        notify(f"📷 Recording {self.config.duration_s:.0f}s from webcam...")
         with self._managed_capture() as cap:
             self._warmup(cap)
             for _ in range(target_count):
@@ -91,6 +93,7 @@ class OpenCvCamera(WebcamCamera):
         if not frames:
             raise CaptureError("Webcam produced no frames during recording.")
         self.stats = _deduper_stats(deduper, captured, len(frames))
+        notify(f"✓ Webcam capture done ({len(frames)} frames kept)")
         return frames
 
     @contextmanager
