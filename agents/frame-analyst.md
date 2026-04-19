@@ -180,35 +180,62 @@ Errors to surface verbatim and stop:
 ## 4.5 Smart frame selection (for multi-frame captures)
 
 After a `capture`, `webcam-capture`, or `watch-query`, you have a list of
-N frame paths. Before reading them at full resolution, apply this rule to
-stay token-efficient:
+N frame paths. Apply **two rules** to stay token-efficient:
 
-- **N ≤ 4**: read all frames with `Read` at full resolution. Skip step 4.5.
-- **N > 4**: do a thumbnail pre-scan:
+### Rule A — thumb pre-scan for N > 4
+
+- **N ≤ 4**: go straight to rule B.
+- **N > 4**: do a thumbnail pre-scan first:
   1. Generate thumbnails with a second-pass dedupe:
      ```
      $HOME/.local/state/claude-vision/bin/claude-vision thumbs \
          --session <session_id>
      ```
      Default size 256px long-edge (~49 tokens each), default
-     `--dedupe-threshold 0.02` collapses near-identical frames into a
-     single representative.
+     `--dedupe-threshold 0.02` collapses near-identical frames.
   2. Read every returned thumbnail with `Read`. These are the only
      candidates worth considering.
-  3. Pick **2–4 frames** that most likely answer the user's question
-     (scene transitions, event frames, frames containing the targeted
-     element — not just positional picks like "first/middle/last").
-  4. Read those 2–4 **full-size** frames with `Read`.
-  5. If the answer is still unclear, load 1–2 more full frames on demand
-     from the remaining thumbnails. Don't bulk-load everything.
+  3. Rank them by likely relevance to the user's question (scene
+     transitions, event frames, frames containing the targeted element).
+     Keep this ranked shortlist of 2–4 candidates.
 
-**Why this matters**: a 30-frame watch session naively read is ~30k
-tokens. Thumb pre-scan with dedup produces ~6 thumbs + 3 full frames =
-~3.4k tokens (-89%), with strictly better selection than reading frames
-by index.
+You now have a shortlist of candidate full-size frames (either the full
+N ≤ 4 list, or the ranked 2–4 from the thumb scan).
 
-Skip the thumb pre-scan entirely if the user asks for an exhaustive
-pass ("analizza tutti i frame uno per uno", "descrivi frame per frame").
+### Rule B — early-stopping when reading full frames
+
+**Do NOT bulk-load the shortlist.** Read one frame at a time, in ranked
+order, and stop as soon as you can answer the user's question
+confidently:
+
+```
+for each candidate in ranked order:
+    Read(candidate)
+    if you can now answer the question: STOP — proceed to step 5
+    else: continue to the next candidate
+```
+
+Most questions are answerable from the **first** loaded frame:
+- "cosa c'è sullo schermo?" → 1 frame is enough (-75% vs 4 frames)
+- "il bottone è attivo?" → 1 frame showing the button
+- "l'errore è comparso?" → the first frame containing it
+
+Only keep loading when the question genuinely needs multiple frames:
+- Animation / transition analysis (needs start + peak + end)
+- Counting events over time
+- Comparing two visual states
+
+**Exception — exhaustive requests**: if the user explicitly asks for a
+frame-by-frame breakdown ("analizza tutti i frame uno per uno",
+"descrivi frame per frame"), skip Rule B and load all shortlisted frames.
+
+### Combined impact
+
+A 30-frame watch session with a simple question:
+- Naive: 30 × 1050 = 31.5k tokens
+- Thumb scan (Rule A): 6 thumbs × 49 + 4 full × 1050 = **4.5k tokens**
+- Thumb scan + early stop (Rule A + B): 6 thumbs × 49 + **1 full** = **~1.3k tokens**
+- **-96% vs naive, with identical precision** for the common case.
 
 ## 5. Analyze
 
