@@ -126,6 +126,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_THUMB_DEDUPE_THRESHOLD,
         help="Second-pass dedupe threshold in [0, 1]; 0 disables (default: 0.02)",
     )
+    thumbs.add_argument(
+        "--max", type=int, default=None, dest="max_thumbs",
+        help="Cap output to the top-N most significant thumbs (by change magnitude)",
+    )
     thumbs.set_defaults(handler=_cmd_thumbs)
 
     clean_cmd = sub.add_parser("clean", help="Delete a single session")
@@ -381,6 +385,7 @@ def _cmd_thumbs(args: argparse.Namespace) -> int:
         session,
         size=args.size,
         dedupe_threshold=args.dedupe_threshold,
+        max_thumbs=args.max_thumbs,
     )
     source_frames = session.list_frames()
     _emit({
@@ -390,6 +395,7 @@ def _cmd_thumbs(args: argparse.Namespace) -> int:
         "kept_count": len(entries),
         "size": args.size,
         "dedupe_threshold": args.dedupe_threshold,
+        "max_thumbs": args.max_thumbs,
         "thumbs": [
             {
                 "frame": str(e.frame_path),

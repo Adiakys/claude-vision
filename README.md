@@ -150,6 +150,10 @@ python -m claude_vision thumbs --session <id> --dedupe-threshold 0.05
 
 # Disable second-pass dedupe (one thumb per frame)
 python -m claude_vision thumbs --session <id> --dedupe-threshold 0
+
+# Cap the output at the top-N most significant thumbs (by change magnitude,
+# temporal order preserved)
+python -m claude_vision thumbs --session <id> --max 10
 ```
 
 The subagent invokes this automatically when a capture returns more than
@@ -211,6 +215,7 @@ claude-vision/
 │   ├── platform_detect.py              # X11 / macOS / Windows / GNOME Wayland
 │   ├── region.py                       # Region + tkinter / pygame / GNOME pickers
 │   ├── dedupe.py                       # drop near-identical frames during video capture
+│   ├── ranking.py                      # signature primitives + rank-by-significance
 │   ├── thumbs.py                       # token-saving second-pass dedupe + 256px thumbnails
 │   ├── watch.py                        # background daemon + live query controller
 │   ├── cleaner.py, cli.py, __main__.py
@@ -221,7 +226,7 @@ claude-vision/
 │   └── cameras/
 │       ├── base.py                     # ABC: snapshot() + record()
 │       └── opencv_camera.py            # OpenCV (webcam, cross-platform)
-├── tests/                              # 85 stdlib-only tests
+├── tests/                              # 100 stdlib-only tests
 ├── pyproject.toml
 └── README.md
 ```

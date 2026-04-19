@@ -9,16 +9,14 @@ vision subagent spend tokens only on frames that carry new information.
 
 from __future__ import annotations
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image
 
-# Down-sample frames to this size before diffing. 64x64 is fast and robust
-# to antialiasing / sub-pixel jitter that would otherwise create false
-# "changed" verdicts.
-SIGNATURE_SIZE = (64, 64)
+from .ranking import compare_signatures, compute_signature
 
 # Mean absolute per-pixel luminance difference, normalized to [0, 1].
 # 1% tolerates cursor motion, text rendering jitter, and compressor noise
-# while still flagging genuine content changes.
+# while still flagging genuine content changes. Signature primitives live
+# in `ranking.py` so they can be reused by the scoring API.
 DEFAULT_THRESHOLD = 0.01
 
 
@@ -42,23 +40,14 @@ class FrameDeduper:
         self._reference: Image.Image | None = None
 
     def should_keep(self, image: Image.Image) -> bool:
-        signature = _signature(image)
+        signature = compute_signature(image)
         if self._reference is None:
             self._reference = signature
             self.kept += 1
             return True
-        if _diff(signature, self._reference) >= self.threshold:
+        if compare_signatures(signature, self._reference) >= self.threshold:
             self._reference = signature
             self.kept += 1
             return True
         self.skipped += 1
         return False
-
-
-def _signature(image: Image.Image) -> Image.Image:
-    return image.convert("L").resize(SIGNATURE_SIZE, Image.BILINEAR)
-
-
-def _diff(a: Image.Image, b: Image.Image) -> float:
-    diff = ImageChops.difference(a, b)
-    return ImageStat.Stat(diff).mean[0] / 255.0

@@ -84,3 +84,36 @@ def test_entries_carry_source_index(session):
 def test_no_frames_returns_empty_list(session):
     entries = generate_thumbnails(session)
     assert entries == []
+
+
+def test_max_thumbs_caps_output(session):
+    for i, c in enumerate(["white", "black", "red", "green", "blue"]):
+        _write_frame(session, i, c)
+    entries = generate_thumbnails(session, max_thumbs=2, dedupe_threshold=0)
+    assert len(entries) == 2
+
+
+def test_max_thumbs_preserves_temporal_order(session):
+    for i, c in enumerate(["white", "red", "black", "green", "blue"]):
+        _write_frame(session, i, c)
+    entries = generate_thumbnails(session, max_thumbs=3, dedupe_threshold=0)
+    indexes = [e.source_index for e in entries]
+    assert indexes == sorted(indexes)
+
+
+def test_max_thumbs_applied_after_dedup(session):
+    # 4 identical, then 2 different — dedup collapses to 3 survivors,
+    # a max of 2 should cap even those.
+    for i in range(4):
+        _write_frame(session, i, "white")
+    _write_frame(session, 4, "black")
+    _write_frame(session, 5, "red")
+    entries = generate_thumbnails(session, max_thumbs=2, dedupe_threshold=0.02)
+    assert len(entries) == 2
+
+
+def test_max_thumbs_none_returns_all_dedup_survivors(session):
+    for i, c in enumerate(["white", "black", "red"]):
+        _write_frame(session, i, c)
+    entries = generate_thumbnails(session, max_thumbs=None, dedupe_threshold=0.02)
+    assert len(entries) == 3

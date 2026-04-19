@@ -193,6 +193,18 @@ N frame paths. Apply **two rules** to stay token-efficient:
      ```
      Default size 256px long-edge (~49 tokens each), default
      `--dedupe-threshold 0.02` collapses near-identical frames.
+
+     For **long watch sessions** (> ~30 surviving thumbs), cap the
+     scan budget with `--max N`:
+     ```
+     ... thumbs --session <session_id> --max 10
+     ```
+     `--max` keeps the **N thumbs with the highest change magnitudes**
+     (ranked by ``ranking.rank_by_significance``) and preserves
+     temporal order in the output. Use it for overview questions on
+     multi-hour sessions where a full thumb-scan would cost thousands
+     of tokens. For animation-bug or transition-detail queries do NOT
+     cap — you want every keyframe.
   2. Read every returned thumbnail with `Read`. These are the only
      candidates worth considering.
   3. Rank them by likely relevance to the user's question (scene
