@@ -51,3 +51,12 @@ class FrameDeduper:
             return True
         self.skipped += 1
         return False
+
+
+def build_from_config(config) -> "FrameDeduper | None":
+    """Build the deduper for a capture, or return None when dedupe is
+    disabled in ``config``. Centralizing this avoids three recorder
+    modules duplicating the same branch."""
+    if not getattr(config, "dedupe", False):
+        return None
+    return FrameDeduper(threshold=config.dedupe_threshold)
