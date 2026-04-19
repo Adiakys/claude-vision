@@ -35,6 +35,11 @@ class CaptureConfig:
     dedupe: bool = True
     dedupe_threshold: float = 0.01
     crop_center: bool = False
+    # Local-captioning options (only consumed by the watch daemon in the
+    # full variant; base ignores them because the ml module is absent).
+    captions_enabled: bool = False
+    caption_model: str = "HuggingFaceTB/SmolVLM-256M-Instruct"
+    caption_device: str = "auto"
     session_root: Path = field(default_factory=_default_session_root)
 
     def __post_init__(self) -> None:

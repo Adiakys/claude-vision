@@ -10,6 +10,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .cameras import select_camera
+from .caption_store import read_captions
 from .cleaner import SESSION_PREFIX, clean, purge_stale
 from .config import CaptureConfig
 from .errors import ClaudeVisionError
@@ -164,6 +165,20 @@ def _add_watch_subparsers(sub) -> None:
         help="Keep every frame even if near-identical",
     )
     start.add_argument("--dedupe-threshold", type=float, default=0.01)
+    start.add_argument(
+        "--captions", dest="captions_enabled", action="store_true", default=False,
+        help="Enable local VLM captioning of each kept frame (requires claude-vision-full)",
+    )
+    start.add_argument(
+        "--caption-model", type=str,
+        default="HuggingFaceTB/SmolVLM-256M-Instruct",
+        help="HuggingFace model id for the captioner (SmolVLM family in v0.7)",
+    )
+    start.add_argument(
+        "--caption-device", type=str, default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Device to run the captioner on (default: auto)",
+    )
     start.set_defaults(handler=_cmd_watch_start)
 
     stop = sub.add_parser("watch-stop", help="Stop the running watch")
@@ -188,6 +203,25 @@ def _add_watch_subparsers(sub) -> None:
     mark = sub.add_parser("watch-mark-seen", help="Mark frames as already analyzed")
     mark.add_argument("paths", nargs="+", help="Frame paths to record in the watermark")
     mark.set_defaults(handler=_cmd_watch_mark_seen)
+
+    captions = sub.add_parser(
+        "watch-captions",
+        help="Read the caption log of a watch session (empty in the base "
+             "variant; populated during watch when --captions was active)",
+    )
+    captions.add_argument(
+        "--session", type=str, default=None,
+        help="Session id or absolute path; omit to read the currently-active watch",
+    )
+    captions.add_argument(
+        "--since-seconds", type=float, default=0.0,
+        help="Return captions from the last N seconds (0 = entire log)",
+    )
+    captions.add_argument(
+        "--only-matches", action="store_true", default=False,
+        help="Return only rows where a proactive trigger matched (v0.8+)",
+    )
+    captions.set_defaults(handler=_cmd_watch_captions)
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
@@ -325,6 +359,8 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
 def _cmd_watch_start(args: argparse.Namespace) -> int:
     platform = detect()
     preflight(platform)
+    if args.captions_enabled:
+        _preflight_captioning(args.caption_model)
     config = CaptureConfig(
         duration_s=1.0,  # unused in watch mode; satisfies the dataclass default
         fps=args.fps,
@@ -333,6 +369,9 @@ def _cmd_watch_start(args: argparse.Namespace) -> int:
         region=_resolve_region(args.region),
         dedupe=args.dedupe,
         dedupe_threshold=args.dedupe_threshold,
+        captions_enabled=args.captions_enabled,
+        caption_model=args.caption_model,
+        caption_device=args.caption_device,
     )
     result = WatchController.start(config)
     _emit({
@@ -342,6 +381,11 @@ def _cmd_watch_start(args: argparse.Namespace) -> int:
         "fps": result.marker.fps,
         "started_at": result.marker.started_at,
         "active": True,
+        "captions": {
+            "enabled": config.captions_enabled,
+            "model": config.caption_model,
+            "device": config.caption_device,
+        },
     })
     return 0
 
@@ -381,6 +425,70 @@ def _cmd_watch_mark_seen(args: argparse.Namespace) -> int:
     WatchController.mark_seen(args.paths)
     _emit({"marked": len(args.paths), "paths": args.paths})
     return 0
+
+
+def _cmd_watch_captions(args: argparse.Namespace) -> int:
+    session = _resolve_caption_session(args.session)
+    since_ms: int | None = None
+    if args.since_seconds > 0:
+        import time as _time
+        since_ms = int((_time.time() - args.since_seconds) * 1000)
+    entries = read_captions(
+        session,
+        since_ms=since_ms,
+        only_matches=args.only_matches,
+    )
+    _emit({
+        "session_id": session.id,
+        "session_path": str(session.root),
+        "count": len(entries),
+        "since_seconds": args.since_seconds,
+        "captions": [
+            {
+                "timestamp_ms": e.timestamp_ms,
+                "frame": e.frame_path,
+                "caption": e.caption,
+                "trigger_match": e.trigger_match,
+            }
+            for e in entries
+        ],
+    })
+    return 0
+
+
+def _preflight_captioning(model_id: str) -> None:
+    """Fail fast in the parent process, before fork, if captioning can't
+    run on this system. Avoids the UX where the daemon silently forks and
+    dies with the user none the wiser."""
+    from .errors import PlatformUnsupportedError
+    try:
+        from .ml import SmolVLMCaptioner  # noqa: F401
+        from .ml.captioner import SUPPORTED_CAPTION_MODELS
+    except ImportError as exc:
+        raise PlatformUnsupportedError(
+            "--captions requires the `claude-vision-full` variant. "
+            "Install with: /plugin install claude-vision-full@claude-vision"
+        ) from exc
+    if model_id not in SUPPORTED_CAPTION_MODELS:
+        raise PlatformUnsupportedError(
+            f"caption model {model_id!r} is not in the v0.7 supported set "
+            f"({sorted(SUPPORTED_CAPTION_MODELS)}). "
+            "Other backends (Florence, MoonDream) are on the v0.8+ roadmap."
+        )
+
+
+def _resolve_caption_session(spec: str | None) -> Session:
+    """watch-captions can either take an explicit --session or, when
+    omitted, read from the currently-active watch session."""
+    if spec is not None:
+        return Session.load(_resolve_session(spec))
+    status = WatchController.status()
+    if not status.get("active"):
+        raise ClaudeVisionError(
+            "no --session given and no active watch; "
+            "pass --session <id> or start a watch first"
+        )
+    return Session.load(Path(status["session_path"]))
 
 
 def _cmd_thumbs(args: argparse.Namespace) -> int:

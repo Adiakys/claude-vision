@@ -32,9 +32,10 @@ from pathlib import Path
 import mss
 from PIL import Image
 
+from .caption_store import CaptionEntry, append_caption
 from .config import CaptureConfig
 from .dedupe import FrameDeduper
-from .errors import CaptureError
+from .errors import CaptureError, PlatformUnsupportedError
 from .notify import notify
 from .recorders.mss_recorder import _maybe_resize
 from .session import Session
@@ -146,6 +147,7 @@ def run_daemon(session: Session, config: CaptureConfig) -> None:
     stop = _SignalStop()
     interval = 1.0 / max(config.fps, 0.001)
     deduper = FrameDeduper(config.dedupe_threshold) if config.dedupe else None
+    captioner = _init_captioner_or_none(config)
     deadline = time.monotonic() + MAX_WATCH_DURATION_S
 
     with mss.mss() as sct:
@@ -163,9 +165,62 @@ def run_daemon(session: Session, config: CaptureConfig) -> None:
                 next_tick = time.monotonic() + interval
                 continue
             if deduper is None or deduper.should_keep(image):
-                _save_frame(image, session, config.scale_width)
+                frame_path = _save_frame(image, session, config.scale_width)
+                if captioner is not None:
+                    _caption_and_log(captioner, image, frame_path, session)
             next_tick += interval
     session.mark("done")
+
+
+def _init_captioner_or_none(config: CaptureConfig):
+    """Build a captioner if captioning is enabled AND the ml module is
+    available (full variant). If captioning is enabled but ml is missing
+    (base variant), raise a clear error up-front — before the daemon even
+    starts — so the user sees it immediately."""
+    if not getattr(config, "captions_enabled", False):
+        return None
+    try:
+        from .ml import SmolVLMCaptioner
+    except ImportError as exc:
+        raise PlatformUnsupportedError(
+            "--captions requires the `claude-vision-full` variant. "
+            "Install with: /plugin install claude-vision-full@claude-vision"
+        ) from exc
+    cache_dir = Path.home() / ".local" / "state" / "claude-vision" / "models"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return SmolVLMCaptioner(
+        model_id=config.caption_model,
+        device=config.caption_device,
+        cache_dir=cache_dir,
+    )
+
+
+def _caption_and_log(captioner, image: Image.Image, frame_path: Path,
+                     session: Session) -> None:
+    """Generate a caption for the frame and append it to the session log.
+    A transient captioner failure does NOT kill the watch — we log the
+    problem and continue. The next frame will try again."""
+    try:
+        caption = captioner.caption(image)
+    except Exception as exc:  # noqa: BLE001
+        # Conservative: never let a captioning hiccup stop the watch.
+        _log_caption_error(session, frame_path, exc)
+        return
+    append_caption(session, CaptionEntry(
+        timestamp_ms=_now_epoch_ms(),
+        frame_path=str(frame_path),
+        caption=caption,
+    ))
+
+
+def _log_caption_error(session: Session, frame_path: Path, exc: Exception) -> None:
+    # Record the failure in the log so the user can see something went wrong,
+    # rather than silently emitting fewer captions than frames.
+    append_caption(session, CaptionEntry(
+        timestamp_ms=_now_epoch_ms(),
+        frame_path=str(frame_path),
+        caption=f"<captioner error: {type(exc).__name__}: {exc}>",
+    ))
 
 
 class _SignalStop:
