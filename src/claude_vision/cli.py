@@ -13,7 +13,7 @@ from .cameras import select_camera
 from .cleaner import SESSION_PREFIX, clean, purge_stale
 from .config import CaptureConfig
 from .errors import ClaudeVisionError
-from .platform_detect import detect, preflight
+from .platform_detect import Platform, detect, preflight
 from .recorders import select_recorder
 from .region import Region
 from .region_picker import pick_interactive
@@ -32,10 +32,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
+        args.platform = _detect_platform_if_required(args)
         return args.handler(args)
     except ClaudeVisionError as exc:
         _emit({"error": type(exc).__name__, "message": str(exc)})
         return 2
+
+
+def _detect_platform_if_required(args: argparse.Namespace) -> Platform | None:
+    """Detect + preflight only for screen-facing commands. Webcam, thumbs,
+    clean, gc, and the watch side-commands (stop/status/query/mark-seen) do
+    not care about X11 vs Wayland and must not trigger preflight errors.
+    Subparsers that need a platform opt in via set_defaults(requires_platform=True).
+    """
+    if not getattr(args, "requires_platform", False):
+        return None
+    platform = detect()
+    preflight(platform)
+    return platform
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -46,70 +60,30 @@ def _build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--duration", type=float, required=True)
     capture.add_argument("--fps", type=float, default=1.0)
     capture.add_argument("--max-frames", type=int, default=24)
-    capture.add_argument(
-        "--scale-width", type=int, default=1568,
-        help="Target width in pixels; 0 disables resize",
-    )
-    capture.add_argument("--monitor", type=int, default=0)
-    capture.add_argument(
-        "--region", type=str, default=None,
-        help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
-    )
-    capture.add_argument(
-        "--no-dedupe", dest="dedupe", action="store_false", default=True,
-        help="Keep every frame even if near-identical (default: drop duplicates)",
-    )
-    capture.add_argument(
-        "--dedupe-threshold", type=float, default=0.01,
-        help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
-    )
-    capture.set_defaults(handler=_cmd_capture)
+    _add_scale_args(capture)
+    _add_monitor_args(capture)
+    _add_region_args(capture)
+    _add_dedupe_args(capture)
+    capture.set_defaults(handler=_cmd_capture, requires_platform=True)
 
     shot = sub.add_parser("screenshot", help="Grab a single frame")
-    shot.add_argument(
-        "--scale-width", type=int, default=1568,
-        help="Target width in pixels; 0 disables resize",
-    )
-    shot.add_argument("--monitor", type=int, default=0)
-    shot.add_argument(
-        "--region", type=str, default=None,
-        help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
-    )
-    shot.set_defaults(handler=_cmd_screenshot)
+    _add_scale_args(shot)
+    _add_monitor_args(shot)
+    _add_region_args(shot)
+    shot.set_defaults(handler=_cmd_screenshot, requires_platform=True)
 
     wshot = sub.add_parser("webcam-snapshot", help="Grab a single frame from the webcam")
-    wshot.add_argument(
-        "--scale-width", type=int, default=1568,
-        help="Target width in pixels; 0 disables resize",
-    )
-    wshot.add_argument("--device", type=int, default=0, help="Webcam device index")
-    wshot.add_argument(
-        "--no-crop", dest="crop_center", action="store_false", default=True,
-        help="Skip the default center-crop (keep full webcam frame)",
-    )
+    _add_scale_args(wshot)
+    _add_webcam_args(wshot)
     wshot.set_defaults(handler=_cmd_webcam_snapshot)
 
     wcap = sub.add_parser("webcam-capture", help="Record a short video from the webcam")
     wcap.add_argument("--duration", type=float, required=True)
     wcap.add_argument("--fps", type=float, default=1.0)
     wcap.add_argument("--max-frames", type=int, default=24)
-    wcap.add_argument(
-        "--scale-width", type=int, default=1568,
-        help="Target width in pixels; 0 disables resize",
-    )
-    wcap.add_argument("--device", type=int, default=0, help="Webcam device index")
-    wcap.add_argument(
-        "--no-dedupe", dest="dedupe", action="store_false", default=True,
-        help="Keep every frame even if near-identical (default: drop duplicates)",
-    )
-    wcap.add_argument(
-        "--dedupe-threshold", type=float, default=0.01,
-        help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
-    )
-    wcap.add_argument(
-        "--no-crop", dest="crop_center", action="store_false", default=True,
-        help="Skip the default center-crop (keep full webcam frame)",
-    )
+    _add_scale_args(wcap)
+    _add_webcam_args(wcap)
+    _add_dedupe_args(wcap)
     wcap.set_defaults(handler=_cmd_webcam_capture)
 
     _add_watch_subparsers(sub)
@@ -148,24 +122,51 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _add_watch_subparsers(sub) -> None:
-    start = sub.add_parser("watch-start", help="Begin an open-ended background screen watch")
-    start.add_argument("--fps", type=float, default=0.5)
-    start.add_argument(
+def _add_scale_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
         "--scale-width", type=int, default=1568,
         help="Target width in pixels; 0 disables resize",
     )
-    start.add_argument("--monitor", type=int, default=0)
-    start.add_argument(
+
+
+def _add_monitor_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--monitor", type=int, default=0)
+
+
+def _add_region_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
         "--region", type=str, default=None,
-        help="Capture only a region: 'interactive' or 'X,Y,W,H'",
+        help="Capture only a region: 'interactive' (drag to select) or 'X,Y,W,H'",
     )
-    start.add_argument(
+
+
+def _add_dedupe_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
         "--no-dedupe", dest="dedupe", action="store_false", default=True,
-        help="Keep every frame even if near-identical",
+        help="Keep every frame even if near-identical (default: drop duplicates)",
     )
-    start.add_argument("--dedupe-threshold", type=float, default=0.01)
-    start.set_defaults(handler=_cmd_watch_start)
+    p.add_argument(
+        "--dedupe-threshold", type=float, default=0.01,
+        help="Mean pixel diff in [0,1] to count as 'changed' (default: 0.01)",
+    )
+
+
+def _add_webcam_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--device", type=int, default=0, help="Webcam device index")
+    p.add_argument(
+        "--no-crop", dest="crop_center", action="store_false", default=True,
+        help="Skip the default center-crop (keep full webcam frame)",
+    )
+
+
+def _add_watch_subparsers(sub) -> None:
+    start = sub.add_parser("watch-start", help="Begin an open-ended background screen watch")
+    start.add_argument("--fps", type=float, default=0.5)
+    _add_scale_args(start)
+    _add_monitor_args(start)
+    _add_region_args(start)
+    _add_dedupe_args(start)
+    start.set_defaults(handler=_cmd_watch_start, requires_platform=True)
 
     stop = sub.add_parser("watch-stop", help="Stop the running watch")
     stop.add_argument("--timeout-s", type=float, default=5.0)
@@ -192,9 +193,7 @@ def _add_watch_subparsers(sub) -> None:
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
-    platform = detect()
-    preflight(platform)
-
+    platform = args.platform
     config = CaptureConfig(
         duration_s=args.duration,
         fps=args.fps,
@@ -232,9 +231,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
 
 
 def _cmd_screenshot(args: argparse.Namespace) -> int:
-    platform = detect()
-    preflight(platform)
-
+    platform = args.platform
     config = CaptureConfig(
         scale_width=args.scale_width,
         monitor_index=args.monitor,
@@ -324,8 +321,6 @@ def _cmd_webcam_capture(args: argparse.Namespace) -> int:
 
 
 def _cmd_watch_start(args: argparse.Namespace) -> int:
-    platform = detect()
-    preflight(platform)
     config = CaptureConfig(
         duration_s=1.0,  # unused in watch mode; satisfies the dataclass default
         fps=args.fps,
