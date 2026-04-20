@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import sys
 from enum import Enum
 
@@ -43,8 +42,10 @@ def preflight(platform: Platform) -> None:
             "Workaround: log into an X11 session (GDM: select 'Xorg' at login)."
         )
     if platform is Platform.GNOME_WAYLAND:
-        if shutil.which("gdbus") is None:
+        try:
+            import jeepney  # noqa: F401
+        except ImportError as exc:
             raise PlatformUnsupportedError(
-                "GNOME Wayland detected but 'gdbus' is not on PATH. "
-                "Install glib2 tooling (e.g. `apt install libglib2.0-bin`)."
-            )
+                "GNOME Wayland capture needs the [wayland] extra: "
+                "install with `pip install claude-vision[wayland]`."
+            ) from exc

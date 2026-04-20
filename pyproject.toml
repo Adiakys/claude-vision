@@ -19,6 +19,7 @@ dependencies = [
 wayland = [
     "imageio>=2.31",
     "imageio-ffmpeg>=0.4",
+    "jeepney>=0.8",
 ]
 webcam = [
     "opencv-python-headless>=4.8",
