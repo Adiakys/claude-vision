@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=claude-vision
+Comment=Screen and webcam capture for the Claude Code vision skill
+Exec=@BINARY@
+Terminal=false
+NoDisplay=true
+Icon=camera-photo
+Categories=Utility;
+StartupWMClass=claude-vision
