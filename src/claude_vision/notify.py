@@ -38,16 +38,10 @@ def notify(message: str, *, title: str = APP_NAME) -> None:
 def _notify_linux(title: str, message: str) -> None:
     if shutil.which("notify-send") is None:
         return
-    # GNOME Shell 47+ filters notifications from apps without a matching
-    # .desktop file in XDG_DATA_DIRS. The bootstrap installs one for us;
-    # the `desktop-entry` hint correlates this message with that file so
-    # gnome-shell stops silently dropping our toasts. Harmless on older
-    # setups / non-GNOME daemons: unknown hints are ignored per spec.
     subprocess.Popen(
         [
             "notify-send",
             f"--app-name={APP_NAME}",
-            f"--hint=string:desktop-entry:{APP_NAME}",
             f"--expire-time={DEFAULT_TIMEOUT_MS}",
             title,
             message,

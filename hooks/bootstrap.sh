@@ -70,21 +70,6 @@ exec python3 -m claude_vision "\$@"
 EOF
 chmod +x "${BINDIR}/claude-vision"
 
-# On Linux desktops, register a .desktop file so GNOME Shell (and other
-# notification daemons that filter by desktop-entry) attribute our toasts
-# correctly instead of silently dropping them. NoDisplay=true keeps it
-# invisible in app launchers — it's metadata only. No-op where the tools
-# or path don't exist (macOS, Windows, headless, non-XDG setups).
-TEMPLATE="${CLAUDE_PLUGIN_ROOT}/share/applications/claude-vision.desktop.in"
-if [ "$(uname -s)" = "Linux" ] && [ -f "${TEMPLATE}" ]; then
-    APPS_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
-    mkdir -p "${APPS_DIR}"
-    sed "s|@BINARY@|${BINDIR}/claude-vision|g" "${TEMPLATE}" \
-        > "${APPS_DIR}/claude-vision.desktop"
-    command -v update-desktop-database >/dev/null 2>&1 \
-        && update-desktop-database "${APPS_DIR}" >/dev/null 2>&1 || true
-fi
-
 # Drop stale markers from previous versions before placing the new one.
 find "${STATE}" -maxdepth 1 -name '.installed-*' -delete 2>/dev/null || true
 touch "${MARKER}"
