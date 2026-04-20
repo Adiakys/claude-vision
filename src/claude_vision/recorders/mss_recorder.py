@@ -8,8 +8,10 @@ from pathlib import Path
 import mss
 from PIL import Image
 
-from ..dedupe import FrameDeduper
+from ..capture_stats import CaptureStats
+from ..dedupe import build_from_config as build_deduper
 from ..errors import CaptureError
+from ..image_ops import resize_to_width
 from ..notify import notify
 from .base import ScreenRecorder
 
@@ -19,7 +21,7 @@ class MssRecorder(ScreenRecorder):
         fps = self.config.effective_fps()
         interval = 1.0 / fps
         planned = self.config.planned_frame_count()
-        deduper = _maybe_deduper(self.config)
+        deduper = build_deduper(self.config)
         frames: list[Path] = []
 
         notify(f"📷 Recording {self.config.duration_s:.0f}s of screen...")
@@ -35,7 +37,9 @@ class MssRecorder(ScreenRecorder):
                 if deduper is not None and not deduper.should_keep(image):
                     continue
                 frames.append(self._save_image(image, len(frames)))
-        self.stats = _deduper_stats(deduper, planned, len(frames))
+        self.stats = CaptureStats.from_deduper(
+            deduper, planned=planned, kept=len(frames),
+        )
         notify(f"✓ Screen capture done ({len(frames)} frames kept)")
         return frames
 
@@ -64,27 +68,7 @@ class MssRecorder(ScreenRecorder):
         return Image.frombytes("RGB", shot.size, shot.rgb)
 
     def _save_image(self, image: Image.Image, idx: int) -> Path:
-        image = _maybe_resize(image, self.config.scale_width)
+        image = resize_to_width(image, self.config.scale_width)
         path = self.session.frames_dir / f"frame_{idx:04d}.png"
         image.save(path, "PNG", optimize=True)
         return path
-
-
-def _maybe_resize(image: Image.Image, target_width: int) -> Image.Image:
-    if target_width <= 0 or image.width <= target_width:
-        return image
-    ratio = target_width / image.width
-    new_size = (target_width, max(1, int(image.height * ratio)))
-    return image.resize(new_size, Image.LANCZOS)
-
-
-def _maybe_deduper(config) -> FrameDeduper | None:
-    if not config.dedupe:
-        return None
-    return FrameDeduper(threshold=config.dedupe_threshold)
-
-
-def _deduper_stats(deduper: FrameDeduper | None, planned: int, kept: int) -> dict:
-    if deduper is None:
-        return {"kept": kept, "skipped": 0, "planned": planned}
-    return {"kept": deduper.kept, "skipped": deduper.skipped, "planned": planned}

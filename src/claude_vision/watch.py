@@ -35,8 +35,8 @@ from PIL import Image
 from .config import CaptureConfig
 from .dedupe import FrameDeduper
 from .errors import CaptureError
+from .image_ops import resize_to_width
 from .notify import notify
-from .recorders.mss_recorder import _maybe_resize
 from .session import Session
 
 MARKER_PATH = Path.home() / ".local" / "state" / "claude-vision" / "active-watch.json"
@@ -196,7 +196,7 @@ def _grab_image(sct, monitor: dict) -> Image.Image:
 
 
 def _save_frame(image: Image.Image, session: Session, scale_width: int) -> Path:
-    image = _maybe_resize(image, scale_width)
+    image = resize_to_width(image, scale_width)
     path = session.frames_dir / f"frame_{_now_epoch_ms()}.png"
     tmp = path.with_suffix(".png.tmp")
     image.save(tmp, "PNG", optimize=True)

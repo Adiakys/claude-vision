@@ -453,9 +453,10 @@ def _region_to_dict(region: Region | None) -> dict[str, int] | None:
 
 def _dedupe_summary(config: CaptureConfig, capturer) -> dict:
     summary = {"enabled": config.dedupe, "threshold": config.dedupe_threshold}
-    if config.dedupe and getattr(capturer, "stats", None):
-        summary["kept"] = capturer.stats.get("kept")
-        summary["skipped"] = capturer.stats.get("skipped")
+    stats = getattr(capturer, "stats", None)
+    if config.dedupe and stats is not None:
+        summary["kept"] = stats.kept
+        summary["skipped"] = stats.skipped
     return summary
 
 

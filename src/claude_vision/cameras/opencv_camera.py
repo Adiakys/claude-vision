@@ -13,9 +13,11 @@ from pathlib import Path
 
 from PIL import Image
 
+from ..capture_stats import CaptureStats
+from ..dedupe import build_from_config as build_deduper
 from ..errors import CaptureError, PlatformUnsupportedError, WebcamPermissionError
+from ..image_ops import resize_to_width
 from ..notify import notify
-from ..recorders.mss_recorder import _deduper_stats, _maybe_deduper, _maybe_resize
 from .base import WebcamCamera
 
 # Logitech C920-class webcams need ~5 frames for auto-exposure to settle.
@@ -75,7 +77,7 @@ class OpenCvCamera(WebcamCamera):
 
     def record(self) -> list[Path]:
         target_count = self.config.planned_frame_count()
-        deduper = _maybe_deduper(self.config)
+        deduper = build_deduper(self.config)
         frames: list[Path] = []
         captured = 0
         notify(f"📷 Recording {self.config.duration_s:.0f}s from webcam...")
@@ -92,7 +94,9 @@ class OpenCvCamera(WebcamCamera):
                 frames.append(self._save_image(image, len(frames)))
         if not frames:
             raise CaptureError("Webcam produced no frames during recording.")
-        self.stats = _deduper_stats(deduper, captured, len(frames))
+        self.stats = CaptureStats.from_deduper(
+            deduper, planned=captured, kept=len(frames),
+        )
         notify(f"✓ Webcam capture done ({len(frames)} frames kept)")
         return frames
 
@@ -176,7 +180,7 @@ class OpenCvCamera(WebcamCamera):
         return image
 
     def _save_image(self, image: Image.Image, idx: int) -> Path:
-        image = _maybe_resize(image, self.config.scale_width)
+        image = resize_to_width(image, self.config.scale_width)
         path = self.session.frames_dir / f"frame_{idx:04d}.png"
         image.save(path, "PNG", optimize=True)
         return path

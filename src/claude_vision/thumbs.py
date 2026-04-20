@@ -27,6 +27,7 @@ from typing import Sequence
 
 from PIL import Image
 
+from .image_ops import resize_long_edge
 from .ranking import compare_signatures, compute_signature
 from .session import Session
 
@@ -120,7 +121,5 @@ def _cap_by_score(
 
 def _write_thumb(source: Path, target: Path, size: int) -> None:
     with Image.open(source) as image:
-        thumb = image.copy()
-    if size > 0 and max(thumb.size) > size:
-        thumb.thumbnail((size, size), Image.LANCZOS)
+        thumb = resize_long_edge(image, size)
     thumb.save(target, "PNG", optimize=True)
