@@ -15,7 +15,8 @@ from .config import CaptureConfig
 from .errors import ClaudeVisionError
 from .platform_detect import detect, preflight
 from .recorders import select_recorder
-from .region import Region, pick_interactive
+from .region import Region
+from .region_picker import pick_interactive
 from .session import Session
 from .thumbs import (
     DEFAULT_THUMB_DEDUPE_THRESHOLD,
