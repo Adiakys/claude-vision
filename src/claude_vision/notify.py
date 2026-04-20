@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 
-APP_NAME = "claude-vision"
+APP_NAME = "Claude Vision"
 DEFAULT_TIMEOUT_MS = 2500
 
 
