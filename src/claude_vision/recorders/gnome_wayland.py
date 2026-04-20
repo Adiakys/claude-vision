@@ -120,7 +120,7 @@ class GnomeWaylandRecorder(ScreenRecorder):
         deduper = _maybe_deduper(self.config)
         frames: list[Path] = []
         decoded = 0
-        for array in imageio.imiter(webm, plugin="pyav"):
+        for array in imageio.imiter(webm, plugin="FFMPEG"):
             if len(frames) >= max_frames:
                 break
             decoded += 1
