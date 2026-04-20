@@ -29,6 +29,7 @@ from pathlib import Path
 from PIL import Image
 
 from ..errors import CaptureError, PlatformUnsupportedError
+from ..notify import notify
 from .base import ScreenRecorder
 from .mss_recorder import _deduper_stats, _maybe_deduper, _maybe_resize
 
@@ -50,6 +51,7 @@ class GnomeWaylandRecorder(ScreenRecorder):
         webm = self.session.root / "recording.webm"
         fps = self.config.effective_fps()
 
+        notify(f"📷 Recording {self.config.duration_s:.0f}s of screen...")
         with _session_bus() as conn:
             self._start_screencast(conn, webm, fps)
             try:
@@ -67,6 +69,7 @@ class GnomeWaylandRecorder(ScreenRecorder):
         frames, stats = self._extract_frames(imageio, webm)
         webm.unlink(missing_ok=True)
         self.stats = stats
+        notify(f"✓ Screen capture done ({len(frames)} frames kept)")
         return frames
 
     def screenshot(self) -> Path:
