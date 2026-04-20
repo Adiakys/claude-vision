@@ -9,7 +9,7 @@
       "name": "claude-vision",
       "source": "./",
       "description": "Let Claude see your screen or webcam. Dispatches a subagent that captures, analyzes frames, and returns a compact report.",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "category": "productivity"
     }
   ]
